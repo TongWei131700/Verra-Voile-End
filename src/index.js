@@ -7,6 +7,7 @@ const { initDB } = require('./db')
 const reservationRouter = require('./routes/reservation')
 const uploadRouter = require('./routes/upload')
 const authRouter = require('./routes/auth')
+const adminRouter = require('./routes/admin')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -22,6 +23,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 app.use('/api/reservation', reservationRouter)
 app.use('/api/upload', uploadRouter)
 app.use('/api/auth', authRouter)
+app.use('/api/admin', adminRouter)
 
 // 健康检查
 app.get('/health', (req, res) => {

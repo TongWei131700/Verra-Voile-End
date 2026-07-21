@@ -6,6 +6,36 @@ const { pool } = require('../db')
 const router = express.Router()
 const JWT_SECRET = process.env.JWT_SECRET || 'verra-voile-secret-key-2026'
 
+// 管理员账号
+const ADMIN_USERNAME = 'tongwei'
+const ADMIN_PASSWORD = 'TongWei131700'
+
+/**
+ * POST /api/auth/admin-login
+ * 管理员登录
+ */
+router.post('/admin-login', (req, res) => {
+  const { username, password } = req.body
+
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    const token = jwt.sign(
+      { role: 'admin', username },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    )
+    return res.json({
+      success: true,
+      message: '管理员登录成功',
+      data: { token, username }
+    })
+  }
+
+  return res.status(401).json({
+    success: false,
+    message: '用户名或密码错误'
+  })
+})
+
 /**
  * POST /api/auth/register
  * 用户注册：手机号 + 密码 + 确认密码
@@ -149,6 +179,32 @@ router.post('/login', async (req, res) => {
       message: '服务器内部错误，请稍后重试',
     })
   }
+})
+
+/**
+ * POST /api/auth/admin-login
+ * 管理员登录：用户名 + 密码
+ */
+router.post('/admin-login', (req, res) => {
+  const { username, password } = req.body
+
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    const token = jwt.sign(
+      { role: 'admin', username },
+      jwtSecret,
+      { expiresIn: '24h' }
+    )
+    return res.json({
+      success: true,
+      message: '管理员登录成功',
+      data: { token, username }
+    })
+  }
+
+  return res.status(401).json({
+    success: false,
+    message: '用户名或密码错误'
+  })
 })
 
 module.exports = router
