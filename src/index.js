@@ -6,6 +6,7 @@ const path = require('path')
 const { initDB } = require('./db')
 const reservationRouter = require('./routes/reservation')
 const uploadRouter = require('./routes/upload')
+const authRouter = require('./routes/auth')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -20,6 +21,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 // 路由
 app.use('/api/reservation', reservationRouter)
 app.use('/api/upload', uploadRouter)
+app.use('/api/auth', authRouter)
 
 // 健康检查
 app.get('/health', (req, res) => {
@@ -35,6 +37,8 @@ async function start() {
       console.log(`  - POST /api/reservation  提交预约`)
       console.log(`  - GET  /api/reservation  查看预约列表`)
       console.log(`  - POST /api/upload        图片上传`)
+      console.log(`  - POST /api/auth/register 用户注册`)
+      console.log(`  - POST /api/auth/login    用户登录`)
       console.log(`  - GET  /health           健康检查`)
     })
   } catch (error) {

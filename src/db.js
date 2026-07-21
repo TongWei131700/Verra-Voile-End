@@ -14,7 +14,7 @@ const pool = mysql.createPool({
  * 初始化数据库表结构
  */
 async function initDB() {
-  const createTableSQL = `
+  const createReservationsSQL = `
     CREATE TABLE IF NOT EXISTS reservations (
       id INT AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(100) NOT NULL COMMENT '客户姓名',
@@ -25,8 +25,18 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预约咨询表';
   `
-  await pool.execute(createTableSQL)
+  const createUsersSQL = `
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      phone VARCHAR(20) UNIQUE NOT NULL COMMENT '手机号',
+      password VARCHAR(255) NOT NULL COMMENT '密码（bcrypt加密）',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+  `
+  await pool.execute(createReservationsSQL)
+  await pool.execute(createUsersSQL)
   console.log('✓ 数据库表 reservations 已就绪')
+  console.log('✓ 数据库表 users 已就绪')
 }
 
 module.exports = { pool, initDB }
