@@ -73,4 +73,46 @@ router.get('/stats', async (req, res) => {
   }
 })
 
+/**
+ * GET /api/admin/chat-users
+ * 获取有聊天记录的用戶列表（含最后一条消息和时间）
+ */
+router.get('/chat-users', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(`
+      SELECT u.id, u.phone,
+        m_last.content AS last_message,
+        m_last.created_at AS last_message_at,
+        m_last.sender_type AS last_sender_type,
+        (SELECT COUNT(*) FROM messages m WHERE m.user_id = u.id AND m.sender_type = 'user' AND m.is_read = 0) AS unread_count
+      FROM users u
+      INNER JOIN messages m_last ON m_last.id = (
+        SELECT m2.id FROM messages m2 WHERE m2.user_id = u.id ORDER BY m2.created_at DESC LIMIT 1
+      )
+      ORDER BY m_last.created_at DESC
+    `)
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('查询聊天用户列表错误:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/admin/user-products/:userId
+ * 获取指定用户的已选商品
+ */
+router.get('/user-products/:userId', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT category_id, product_id, name, name_en, price, unit, created_at FROM user_selected_products WHERE user_id = ? ORDER BY created_at ASC',
+      [req.params.userId]
+    )
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('查询用户商品失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
 module.exports = router
