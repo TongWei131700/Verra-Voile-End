@@ -1,5 +1,5 @@
 const express = require('express')
-const { pool, getCategoryTable, ensureCategoryTable } = require('../db')
+const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable } = require('../db')
 
 const router = express.Router()
 
@@ -16,6 +16,67 @@ router.get('/', async (req, res) => {
     res.json({ success: true, data: { categories } })
   } catch (error) {
     console.error('获取商品种类失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/destination
+ * 获取目的地场地数据（按城市分组）
+ */
+router.get('/destination', async (req, res) => {
+  try {
+    await ensureDestinationTable(pool)
+    const [rows] = await pool.execute(
+      `SELECT product_id AS productId, name, name_en AS nameEn, description, image, price, unit, capacity, highlight,
+              city_id AS cityId, category_id AS categoryId, category_name AS categoryName,
+              category_name_en AS categoryNameEn, category_icon AS categoryIcon, sort_order
+       FROM \`products_destination\`
+       ORDER BY city_id ASC, category_id ASC, sort_order ASC`
+    )
+
+    // 按城市分组
+    const cityMap = {}
+    for (const row of rows) {
+      const cid = row.cityId
+      if (!cityMap[cid]) {
+        cityMap[cid] = {
+          cityId: cid,
+          categories: {},
+        }
+      }
+      const catId = row.categoryId
+      if (!cityMap[cid].categories[catId]) {
+        cityMap[cid].categories[catId] = {
+          id: row.categoryId,
+          label: row.categoryName,
+          labelEn: row.categoryNameEn,
+          icon: row.categoryIcon,
+          venues: [],
+        }
+      }
+      cityMap[cid].categories[catId].venues.push({
+        id: row.productId,
+        name: row.name,
+        nameEn: row.nameEn,
+        desc: row.description,
+        img: row.image,
+        price: row.price,
+        unit: row.unit,
+        capacity: row.capacity,
+        highlight: row.highlight,
+      })
+    }
+
+    // 转为数组格式
+    const cities = Object.values(cityMap).map(city => ({
+      cityId: city.cityId,
+      categories: Object.values(city.categories),
+    }))
+
+    res.json({ success: true, data: { cities } })
+  } catch (error) {
+    console.error('获取目的地场地失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })
