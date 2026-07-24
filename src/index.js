@@ -12,6 +12,8 @@ const authRouter = require('./routes/auth')
 const adminRouter = require('./routes/admin')
 const cartRouter = require('./routes/cart')
 const chatNotifyRouter = require('./routes/chat')
+const productsRouter = require('./routes/products')
+const versionRouter = require('./routes/version')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -30,6 +32,8 @@ app.use('/api/auth', authRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/cart', cartRouter)
 app.use('/api/chat', chatNotifyRouter)
+app.use('/api/products', productsRouter)
+app.use('/api/version', versionRouter)
 
 // 健康检查
 app.get('/health', (req, res) => {

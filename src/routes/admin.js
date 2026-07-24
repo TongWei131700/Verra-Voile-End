@@ -1,6 +1,6 @@
 const express = require('express')
 const jwt = require('jsonwebtoken')
-const { pool } = require('../db')
+const { pool, getCategoryTable, ensureCategoryTable } = require('../db')
 
 const router = express.Router()
 const JWT_SECRET = process.env.JWT_SECRET || 'verra-voile-secret-key-2026'
@@ -111,6 +111,216 @@ router.get('/user-products/:userId', async (req, res) => {
     res.json({ success: true, data: rows })
   } catch (error) {
     console.error('查询用户商品失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * POST /api/admin/mark-read/:userId
+ * 将指定用户的所有未读消息标记为已读
+ */
+router.post('/mark-read/:userId', async (req, res) => {
+  try {
+    await pool.execute(
+      "UPDATE messages SET is_read = 1 WHERE user_id = ? AND sender_type = 'user' AND is_read = 0",
+      [req.params.userId]
+    )
+    res.json({ success: true })
+  } catch (error) {
+    console.error('标记已读失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+// ==================== 商品管理（按种类独立表） ====================
+
+/**
+ * GET /api/admin/products
+ * 获取所有商品（遍历各类别独立表）
+ */
+router.get('/products', async (req, res) => {
+  try {
+    const [modules] = await pool.execute(
+      'SELECT id, name, name_en AS nameEn FROM product_modules ORDER BY sort_order ASC'
+    )
+    const allProducts = []
+    for (const mod of modules) {
+      const tableName = await ensureCategoryTable(pool, mod.id)
+      const [products] = await pool.execute(
+        `SELECT id, product_id AS productId, name, name_en AS nameEn, description, image, price, unit, capacity, highlight, sort_order FROM \`${tableName}\` ORDER BY sort_order ASC`
+      )
+      for (const p of products) {
+        allProducts.push({ ...p, categoryId: mod.id })
+      }
+    }
+    res.json({ success: true, data: { modules, products: allProducts } })
+  } catch (error) {
+    console.error('查询商品列表失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * POST /api/admin/products
+ * 新增商品（插入到对应种类的独立表）
+ */
+router.post('/products', async (req, res) => {
+  try {
+    const { categoryId, productId, name, nameEn, description, image, price, unit, capacity, highlight, sortOrder } = req.body
+    if (!categoryId || !productId || !name) {
+      return res.status(400).json({ success: false, message: 'categoryId、productId、name 为必填项' })
+    }
+    const tableName = await ensureCategoryTable(pool, categoryId)
+    await pool.execute(
+      `INSERT INTO \`${tableName}\` (product_id, name, name_en, description, image, price, unit, capacity, highlight, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [productId, name, nameEn || '', description || '', image || '', price || 0, unit || '€', capacity || '', highlight || '', sortOrder || 0]
+    )
+    res.json({ success: true, message: '商品创建成功' })
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: '该分类下已存在相同 product_id 的商品' })
+    }
+    console.error('创建商品失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * PUT /api/admin/products/:id
+ * 更新商品（需传 categoryId 确定对应表）
+ */
+router.put('/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { categoryId, productId, name, nameEn, description, image, price, unit, capacity, highlight, sortOrder } = req.body
+    if (!categoryId) {
+      return res.status(400).json({ success: false, message: 'categoryId 为必填项' })
+    }
+    const tableName = await ensureCategoryTable(pool, categoryId)
+    const [result] = await pool.execute(
+      `UPDATE \`${tableName}\` SET product_id=?, name=?, name_en=?, description=?, image=?, price=?, unit=?, capacity=?, highlight=?, sort_order=?
+       WHERE id=?`,
+      [productId, name, nameEn || '', description || '', image || '', price || 0, unit || '€', capacity || '', highlight || '', sortOrder || 0, id]
+    )
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '商品不存在' })
+    }
+    res.json({ success: true, message: '商品更新成功' })
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: '该分类下已存在相同 product_id 的商品' })
+    }
+    console.error('更新商品失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * DELETE /api/admin/products/:id
+ * 删除商品（需传 categoryId 确定对应表）
+ */
+router.delete('/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { categoryId } = req.body
+    if (!categoryId) {
+      return res.status(400).json({ success: false, message: 'categoryId 为必填项' })
+    }
+    const tableName = getCategoryTable(categoryId)
+    const [result] = await pool.execute(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id])
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '商品不存在' })
+    }
+    res.json({ success: true, message: '商品删除成功' })
+  } catch (error) {
+    console.error('删除商品失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+// ==================== 模块管理 ====================
+
+/**
+ * GET /api/admin/product-modules
+ * 获取所有商品模块
+ */
+router.get('/product-modules', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, name, name_en AS nameEn, image, description, sort_order FROM product_modules ORDER BY sort_order ASC'
+    )
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('查询模块列表失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * POST /api/admin/product-modules
+ * 新增模块
+ */
+router.post('/product-modules', async (req, res) => {
+  try {
+    const { id, name, nameEn, image, description, sortOrder } = req.body
+    if (!id || !name) {
+      return res.status(400).json({ success: false, message: 'id、name 为必填项' })
+    }
+    await pool.execute(
+      'INSERT INTO product_modules (id, name, name_en, image, description, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, name, nameEn || '', image || '', description || '', sortOrder || 0]
+    )
+    res.json({ success: true, message: '模块创建成功' })
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: '该模块 ID 已存在' })
+    }
+    console.error('创建模块失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * PUT /api/admin/product-modules/:id
+ * 更新模块
+ */
+router.put('/product-modules/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { name, nameEn, image, description, sortOrder } = req.body
+    const [result] = await pool.execute(
+      'UPDATE product_modules SET name=?, name_en=?, image=?, description=?, sort_order=? WHERE id=?',
+      [name, nameEn || '', image || '', description || '', sortOrder || 0, id]
+    )
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '模块不存在' })
+    }
+    res.json({ success: true, message: '模块更新成功' })
+  } catch (error) {
+    console.error('更新模块失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * DELETE /api/admin/product-modules/:id
+ * 删除模块（同时删除其下所有商品）
+ */
+router.delete('/product-modules/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    // 删除对应的独立商品表
+    const tableName = getCategoryTable(id)
+    await pool.execute(`DROP TABLE IF EXISTS \`${tableName}\``)
+    // 删除种类记录
+    const [result] = await pool.execute('DELETE FROM product_modules WHERE id = ?', [id])
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '种类不存在' })
+    }
+    res.json({ success: true, message: '种类及其商品已删除' })
+  } catch (error) {
+    console.error('删除种类失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })
