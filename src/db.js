@@ -28,7 +28,8 @@ async function initDB() {
   const createUsersSQL = `
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      phone VARCHAR(20) UNIQUE NOT NULL COMMENT '手机号',
+      phone VARCHAR(20) UNIQUE COMMENT '手机号',
+      email VARCHAR(255) UNIQUE COMMENT '邮箱',
       password VARCHAR(255) NOT NULL COMMENT '密码（bcrypt加密）',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
@@ -36,8 +37,9 @@ async function initDB() {
   const createVerificationCodesSQL = `
     CREATE TABLE IF NOT EXISTS verification_codes (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      phone VARCHAR(20) NOT NULL COMMENT '手机号',
+      phone VARCHAR(255) NOT NULL COMMENT '手机号或邮箱',
       code VARCHAR(6) NOT NULL COMMENT '验证码',
+      type VARCHAR(20) DEFAULT 'sms' COMMENT '验证方式: sms/email',
       used TINYINT(1) DEFAULT 0 COMMENT '是否已使用',
       expires_at TIMESTAMP NOT NULL COMMENT '过期时间',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

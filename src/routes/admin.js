@@ -34,7 +34,7 @@ router.use(authMiddleware)
 router.get('/users', async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT id, phone, created_at FROM users ORDER BY created_at DESC'
+      'SELECT id, phone, email, created_at FROM users ORDER BY created_at DESC'
     )
     res.json({ success: true, data: rows })
   } catch (error) {
