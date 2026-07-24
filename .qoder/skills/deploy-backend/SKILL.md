@@ -24,6 +24,34 @@ description: 将后端代码打包部署到远程服务器，包括上传代码�
 
 ## 部署步骤
 
+### 0. Git 版本控制（必须先执行）
+
+在部署前，必须先完成以下 git 操作：
+
+```bash
+cd /Users/hongli/WorkSpace/Verra-Voile-End
+
+# 1. 提交所有改动
+git add -A
+git commit -m "feat: 部署更新"
+
+# 2. 合并到 main
+git checkout main
+git merge <当前分支> --no-edit
+git push origin main
+
+# 3. 获取下一版本号（从线上 API 获取）
+NEXT_VERSION=$(curl -s http://47.99.138.250/api/version/next?side=backend | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
+
+# 4. 创建并切换到下一版本分支
+git checkout -b daily/${NEXT_VERSION}
+git push origin daily/${NEXT_VERSION}
+```
+
+**分支命名规范**: `daily/x.y.z`（不使用 be/ 或 fe/ 前缀）
+
+**注意**: 如果当前没有未提交改动，跳过 commit 步骤，但仍需执行合并 main 和创建新分支。
+
 ### 1. 确认部署
 
 使用 `AskUserQuestion` 告知用户即将部署，确认继续。
@@ -118,6 +146,7 @@ cd /var/www/verra-voile-end && pm2 start src/index.js --name verra-voile-api && 
 ## 输出
 
 部署完成后报告：
+- Git 分支操作结果（合并到 main、新建分支）
 - 打包状态
 - 上传结果
 - 健康检查 HTTP 响应

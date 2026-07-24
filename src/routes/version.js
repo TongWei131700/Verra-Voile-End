@@ -32,7 +32,7 @@ const FRONTEND_DIR = '/Users/hongli/WorkSpace/Verra-Voile'
 const BACKEND_DIR = '/Users/hongli/WorkSpace/Verra-Voile-End'
 
 // 分支前缀
-const BRANCH_PREFIX = { frontend: 'fe', backend: 'daily' }
+const BRANCH_PREFIX = { frontend: 'daily', backend: 'daily' }
 
 function getDir(side) {
   return side === 'frontend' ? FRONTEND_DIR : BACKEND_DIR
