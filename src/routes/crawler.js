@@ -73,7 +73,7 @@ function getNameCN(name) {
 async function crawlGreeceDestinations(limit = 5) {
   const COUNTRY = 'Greece'
   const COUNTRY_CN = '希腊'
-  const SOURCE_URL = 'https://www.weddingwire.com/shared/search?destCountry=10'
+  const SOURCE_URL = 'https://www.weddingwire.com/shared/search?state_id=1030&region_id=10531&group_id=1'
 
   crawlState = {
     running: true,
