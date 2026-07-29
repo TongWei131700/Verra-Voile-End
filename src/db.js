@@ -134,6 +134,10 @@ async function initDB() {
   // 种子数据：插入默认商品模块和商品（仅首次为空时插入）
   await seedProducts(pool)
 
+  // 爬取目的地试验表
+  await ensureCrawledDestinationsTable(pool)
+  await seedCrawledDestinations(pool)
+
   // 目的地场地表（含城市分组字段）
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
@@ -353,6 +357,19 @@ async function seedDestinationVenues(pool) {
     { product_id: 'matterhorn', name: '马特洪峰观景台', name_en: 'Matterhorn View Terrace', description: '三角峰顶的震撼全景，云端之上的极致仪式体验', image: 'https://images.unsplash.com/photo-1609948543765-5c4b8d5d5f8a?w=600&h=400&fit=crop', price: 45, unit: '万起/场', capacity: '20-60人', highlight: '限定', city_id: 14, category_id: 'alpine', category_name: '雪山', category_name_en: 'Alpine', category_icon: '🏔️', sort_order: 2 },
     { product_id: 'burgenstock', name: '布尔根施托克度假村', name_en: 'Bürgenstock Resort', description: '卢塞恩湖畔悬崖上的百年奢华酒店，俯瞰四森林州湖', image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=400&fit=crop', price: 68, unit: '万起/场', capacity: '60-250人', highlight: '热门', city_id: 14, category_id: 'swiss-hotel', category_name: '酒店', category_name_en: 'Hotel & Resort', category_icon: '🏨', sort_order: 1 },
     { product_id: 'giessbach', name: '吉斯巴赫大酒店', name_en: 'Hotel Giessbach', description: '瀑布旁的湖畔宫殿，乘船方可抵达的隐秘婚礼圣地', image: 'https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=600&h=400&fit=crop', price: 42, unit: '万起/场', capacity: '40-120人', highlight: '', city_id: 14, category_id: 'swiss-hotel', category_name: '酒店', category_name_en: 'Hotel & Resort', category_icon: '🏨', sort_order: 2 },
+    // 波尔多 (city_id=15)
+    // 庄园
+    { product_id: 'chateau-valouze', name: '瓦卢兹城堡', name_en: 'Château de la Valouze', description: '波尔多乡野间的百年庄园，43间卧室可容纳96人住宿。Grand Hall可举办150人晚宴或200人派对，配有地下爵士吧、Black Swan夜店、泳池及34公顷公园', image: 'https://smp-is.stylemepretty.com/uploads/portfolio/511492/hyepjvq$!1200x.jpg', price: 0, unit: '——', capacity: '96-200人', highlight: '', city_id: 15, category_id: 'manor', category_name: '庄园', category_name_en: 'Manor & Château', category_icon: '🏰', sort_order: 1 },
+    // 都柏林 (city_id=16)
+    { product_id: 'luttrellstown-castle', name: '拉特雷尔斯敦城堡', name_en: 'Luttrellstown Castle', description: '都柏林近郊的专属城堡庄园，适合独家婚礼派对、商务活动及影视拍摄，中世纪建筑与翡翠绿茵交相辉映', image: 'https://smp-is.stylemepretty.com/uploads/lbb/default-listing$!1200x.png', price: 0, unit: '——', capacity: '——', highlight: '', city_id: 16, category_id: 'manor', category_name: '庄园', category_name_en: 'Manor & Château', category_icon: '🏰', sort_order: 1 },
+    // 纽约 (city_id=17)
+    { product_id: 'lake-house-canandaigua', name: '卡南代瓜湖畔庄园', name_en: 'The Lake House on Canandaigua', description: '纽约指金湖畔的顶级度假胜地，拥有专属婚礼策划师、精致花园、湖畔场地与世界级餐饮，打造难忘的婚礼周末体验', image: 'https://smp-is.stylemepretty.com/uploads/portfolio/556707/1js5j86$!1200x.JPG', price: 0, unit: '——', capacity: '——', highlight: '', city_id: 17, category_id: 'lakeside', category_name: '湖畔', category_name_en: 'Lakeside', category_icon: '🏞️', sort_order: 1 },
+    // 坦帕 (city_id=18)
+    { product_id: 'mill-pond-estate', name: '磨坊池塘庄园', name_en: 'Mill Pond Estate', description: '坦帕户外婚礼场地，灵感丰富的户外仪式与接待空间，每年限量接待新人，专注打造个性化婚礼体验', image: 'https://smp-is.stylemepretty.com/uploads/portfolio/547814/2tu2pyvjq$!1200x.jpg', price: 0, unit: '——', capacity: '——', highlight: '', city_id: 18, category_id: 'manor', category_name: '庄园', category_name_en: 'Manor & Estate', category_icon: '🏰', sort_order: 1 },
+    // 科德角 (city_id=19)
+    { product_id: 'wychmere-beach-club', name: '威奇米尔海滩俱乐部', name_en: 'Wychmere Beach Club', description: '科德角海滨度假胜地，将新英格兰经典美式风格与航海优雅完美融合，海景露台与海滨仪式场地提供绝美背景', image: 'https://smp-is.stylemepretty.com/uploads/portfolio/570081/40vobao$!1200x.jpg', price: 0, unit: '——', capacity: '——', highlight: '', city_id: 19, category_id: 'hotel', category_name: '度假村', category_name_en: 'Resort & Club', category_icon: '🏨', sort_order: 1 },
+    // 帕克城 (city_id=20)
+    { product_id: 'river-bottoms-ranch', name: '河滩牧场', name_en: 'River Bottoms Ranch', description: '落基山脉脚下的现代农舍风格牧场，白色谷仓大厅可容纳175位晚宴或300位派对嘉宾，360度山谷、河流与雪山全景', image: 'https://smp-is.stylemepretty.com/uploads/portfolio/532904/41q3uvx$!1200x.JPG', price: 0, unit: '——', capacity: '175-300人', highlight: '', city_id: 20, category_id: 'manor', category_name: '庄园', category_name_en: 'Ranch & Estate', category_icon: '🏰', sort_order: 1 },
   ]
 
   for (const v of venues) {
@@ -363,6 +380,370 @@ async function seedDestinationVenues(pool) {
     )
   }
   console.log(`✓ 目的地场地种子数据已插入（${venues.length} 条）`)
+}
+
+/**
+ * 创建爬取目的地试验表
+ */
+async function ensureCrawledDestinationsTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS crawled_destinations (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(100) NOT NULL COMMENT 'URL标识，如 amalfi-coast',
+      name VARCHAR(200) NOT NULL COMMENT '目的地英文名',
+      name_cn VARCHAR(200) DEFAULT '' COMMENT '目的地中文名',
+      country VARCHAR(100) DEFAULT '' COMMENT '国家英文名',
+      country_cn VARCHAR(100) DEFAULT '' COMMENT '国家中文名',
+      source_url VARCHAR(500) DEFAULT '' COMMENT '爬取来源URL',
+      tagline VARCHAR(300) DEFAULT '' COMMENT '副标题/宣传语',
+      description TEXT COMMENT '完整描述文案',
+      features JSON COMMENT '特色亮点（JSON数组）',
+      venue_types JSON COMMENT '可用场地类型（JSON数组）',
+      towns JSON COMMENT '提及的城镇（JSON数组）',
+      images JSON COMMENT '图片URL列表（JSON数组）',
+      budget_ranges JSON COMMENT '预算区间（JSON数组）',
+      guest_capacities JSON COMMENT '宾客人数选项（JSON数组）',
+      cover_image VARCHAR(500) DEFAULT '' COMMENT '封面图URL',
+      sort_order INT DEFAULT 0 COMMENT '排序权重',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_slug (slug),
+      INDEX idx_country (country)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='爬取目的地试验表'
+  `)
+  console.log('✓ 表 crawled_destinations 已就绪')
+}
+
+/**
+ * 种子数据：插入爬取的目的地
+ */
+async function seedCrawledDestinations(pool) {
+  const [count] = await pool.execute('SELECT COUNT(*) as cnt FROM crawled_destinations')
+  if (count[0].cnt > 0) {
+    // 已有数据，检查是否需要更新英文内容
+    await updateCrawledDestinationsCN(pool)
+    // 插入新增的目的地
+    await insertNewCrawledDestinations(pool)
+    return
+  }
+
+  const destinations = [
+    {
+      slug: 'amalfi-coast',
+      name: 'Amalfi Coast',
+      name_cn: '阿马尔菲海岸',
+      country: 'Italy',
+      country_cn: '意大利',
+      source_url: 'https://italiandestinationweddings.com/destinations/amalfi-coast/',
+      tagline: '在意大利的阳光下庆祝爱情',
+      description: `想象一下，在地中海蔚蓝海水上方的悬崖露台上交换誓言，空气中弥漫着茉莉和柑橘花的芬芳。想象你的婚宴沐浴在金色夕阳的光辉中，海浪拍岸的节奏声化作自然的小夜曲。这一切，都在阿马尔菲海岸等你——一个无与伦比的婚礼目的地。
+
+这条壮丽的海岸线上，古朴的村庄依偎在崎岖的悬崖间，为你的特别日子提供了千变万化的体验。无论你梦想在隐秘的小海湾举办亲密仪式，还是在历史别墅中举行盛大庆典，阿马尔菲海岸的婚礼策划都能满足你的每一个愿望。
+
+除了令人叹为观止的风景，你还能体验意大利文化的热情与活力。漫步波西塔诺和阿马尔菲等迷人小镇，鹅卵石街道两旁是五彩缤纷的商店和咖啡馆。沉浸在丰富的历史中，从古代遗迹到迷人的教堂，每一处都在诉说着往昔的故事。
+
+尽情品味该地区 renowned 的美食，以新鲜海鲜和当地农产品闻名。从精致的卡普雷塞沙拉到美味的意大利面，你的婚礼菜单将是一曲意大利风味的交响乐，完美衬托周围的美景。
+
+阿马尔菲海岸提供的不仅仅是一个婚礼日，更是为你和宾客打造一段难忘的旅程。乘船探索隐秘的小海湾和僻静海滩，沿着壮丽的海岸线徒步旅行，或者只是在原始的海滩上放松身心，享受阳光。
+
+将你的爱情故事编织进阿马尔菲海岸的婚礼画卷中。让这个非凡目的地的魔力，创造持续一生的美好回忆。`,
+      features: JSON.stringify([
+        '悬崖露台仪式，俯瞰地中海蔚蓝海水',
+        '茉莉和柑橘花香弥漫的空气',
+        '金色日落光辉中的招待会',
+        '海浪拍岸的自然小夜曲',
+        '古朴村庄依偎在崎岖悬崖上',
+        '隐秘小海湾的亲密仪式或历史别墅的盛大庆典',
+        '丰富的历史：从古代遗迹到迷人的教堂',
+        '著名美食：新鲜海鲜、当地农产品、卡普雷塞沙拉、意大利面',
+        '乘船探索隐秘小海湾和僻静海滩',
+        '沿壮观海岸线的徒步旅行',
+        '众多原始海滩'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '悬崖露台', name_en: 'Cliffside Terrace' },
+        { name: '隐秘小海湾', name_en: 'Hidden Cove' },
+        { name: '历史别墅', name_en: 'Historic Villa' },
+        { name: '专属婚礼别墅', name_en: 'Exclusive Wedding Villa' },
+        { name: '海滩', name_en: 'Beach' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Positano', name_cn: '波西塔诺' },
+        { name: 'Amalfi', name_cn: '阿马尔菲' }
+      ]),
+      images: JSON.stringify([
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-1.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-2.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-3.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-4.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-5.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-6.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-7.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-8.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-10.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-9.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-11.jpg'
+      ]),
+      budget_ranges: JSON.stringify([
+        { label: '4万 - 8万欧元', min: 40000, max: 80000 },
+        { label: '8万 - 15万欧元', min: 80000, max: 150000 },
+        { label: '15万 - 25万欧元', min: 150000, max: 250000 },
+        { label: '25万 - 50万欧元', min: 250000, max: 500000 },
+        { label: '50万欧元以上', min: 500000, max: null }
+      ]),
+      guest_capacities: JSON.stringify(['0-40人', '40-80人', '80-120人', '120人以上']),
+      cover_image: 'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-amalfi-coast-1.jpg',
+      sort_order: 1
+    }
+  ]
+
+  for (const d of destinations) {
+    await pool.execute(
+      `INSERT INTO crawled_destinations (slug, name, name_cn, country, country_cn, source_url, tagline, description, features, venue_types, towns, images, budget_ranges, guest_capacities, cover_image, cover_image_url, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [d.slug, d.name, d.name_cn, d.country, d.country_cn, d.source_url, d.tagline, d.description, d.features, d.venue_types, d.towns, d.images, d.budget_ranges, d.guest_capacities, d.cover_image, d.cover_image_url || d.cover_image, d.sort_order]
+    )
+  }
+  console.log(`✓ 爬取目的地种子数据已插入（${destinations.length} 条）`)
+}
+
+/**
+ * 更新已有爬取目的地数据为中文
+ */
+async function updateCrawledDestinationsCN(pool) {
+  const [rows] = await pool.execute("SELECT id, tagline, description, budget_ranges FROM crawled_destinations WHERE slug = 'amalfi-coast'")
+  if (rows.length === 0) return
+  const row = rows[0]
+
+  // 如果已经是中文则跳过
+  if (row.tagline && row.tagline.includes('阳光')) return
+
+  await pool.execute(
+    `UPDATE crawled_destinations SET tagline = ?, description = ?, budget_ranges = ?, guest_capacities = ? WHERE slug = 'amalfi-coast'`,
+    [
+      '在意大利的阳光下庆祝爱情',
+      `想象一下，在地中海蔚蓝海水上方的悬崖露台上交换誓言，空气中弥漫着茉莉和柑橘花的芬芳。想象你的婚宴沐浴在金色夕阳的光辉中，海浪拍岸的节奏声化作自然的小夜曲。这一切，都在阿马尔菲海岸等你——一个无与伦比的婚礼目的地。\n\n这条壮丽的海岸线上，古朴的村庄依偎在崎岖的悬崖间，为你的特别日子提供了千变万化的体验。无论你梦想在隐秘的小海湾举办亲密仪式，还是在历史别墅中举行盛大庆典，阿马尔菲海岸的婚礼策划都能满足你的每一个愿望。\n\n除了令人叹为观止的风景，你还能体验意大利文化的热情与活力。漫步波西塔诺和阿马尔菲等迷人小镇，鹅卵石街道两旁是五彩缤纷的商店和咖啡馆。沉浸在丰富的历史中，从古代遗迹到迷人的教堂，每一处都在诉说着往昔的故事。\n\n尽情品味该地区 renowned 的美食，以新鲜海鲜和当地农产品闻名。从精致的卡普雷塞沙拉到美味的意大利面，你的婚礼菜单将是一曲意大利风味的交响乐，完美衬托周围的美景。\n\n阿马尔菲海岸提供的不仅仅是一个婚礼日，更是为你和宾客打造一段难忘的旅程。乘船探索隐秘的小海湾和僻静海滩，沿着壮丽的海岸线徒步旅行，或者只是在原始的海滩上放松身心，享受阳光。\n\n将你的爱情故事编织进阿马尔菲海岸的婚礼画卷中。让这个非凡目的地的魔力，创造持续一生的美好回忆。`,
+      JSON.stringify([
+        { label: '4万 - 8万欧元', min: 40000, max: 80000 },
+        { label: '8万 - 15万欧元', min: 80000, max: 150000 },
+        { label: '15万 - 25万欧元', min: 150000, max: 250000 },
+        { label: '25万 - 50万欧元', min: 250000, max: 500000 },
+        { label: '50万欧元以上', min: 500000, max: null }
+      ]),
+      JSON.stringify(['0-40人', '40-80人', '80-120人', '120人以上'])
+    ]
+  )
+  console.log('✓ 爬取目的地数据已更新为中文')
+}
+
+/**
+ * 插入新增的爬取目的地（跳过已存在的）
+ */
+async function insertNewCrawledDestinations(pool) {
+  const budgetRanges = JSON.stringify([
+    { label: '4万 - 8万欧元', min: 40000, max: 80000 },
+    { label: '8万 - 15万欧元', min: 80000, max: 150000 },
+    { label: '15万 - 25万欧元', min: 150000, max: 250000 },
+    { label: '25万 - 50万欧元', min: 250000, max: 500000 },
+    { label: '50万欧元以上', min: 500000, max: null }
+  ])
+  const guestCapacities = JSON.stringify(['0-40人', '40-80人', '80-120人', '120人以上'])
+
+  const newDests = [
+    {
+      slug: 'lake-como',
+      name: 'Lake Como', name_cn: '科莫湖',
+      country: 'Italy', country_cn: '意大利',
+      source_url: 'https://italiandestinationweddings.com/destinations/lake-como/',
+      tagline: '在迷人的科莫湖见证童话般的婚礼',
+      description: `依偎在意大利阿尔卑斯山脚下的科莫湖，为你的梦想婚礼提供了令人叹为观止的背景。这个风景如画的目的地深受名人和新人的喜爱，不仅仅是一个令人惊叹的地点，更是一种在心底久久回荡的体验。\n\n想象一下在迷人的湖畔露台上交换誓言，微风轻拂，夕阳将水面染成金色和蓝宝石般的色彩。想象你的婚宴在星空下举行，闪烁的灯光如同百万萤火虫点缀着天鹅绒般的夜空。科莫湖的精致之美为难忘的时刻提供了画布，让你的婚礼成为一件视觉杰作。\n\n除了美景，科莫湖还拥有丰富的文化底蕴和热情好客的氛围。奢华的历史别墅配以华丽的花园，增添了一抹宏伟气派，而迷人的当地小餐馆则散发着质朴的优雅。无论你憧憬亲密的聚会还是盛大的庆典，科莫湖都能满足你的每一个愿望。\n\n该地区的美食场景同样令人赞叹。以新鲜当地食材和精致烹饪闻名，意大利美食在这里绽放光彩。从精致的湖鱼菜肴到奢华的意面创意，你的科莫湖婚礼菜单将是一曲风味的交响乐，挑动宾客的味蕾。\n\n科莫湖的魅力远不止婚礼当天。周边地区提供丰富的婚前和婚后活动，从探索贝拉焦和瓦伦纳等迷人村庄，到在闪烁的湖面上开启浪漫的游船之旅。你的宾客可以沉浸在丰富的历史中，品味当地美食，在这个田园诗般的地方创造持久的回忆。`,
+      features: JSON.stringify([
+        '阿尔卑斯山脚下的壮丽背景',
+        '迷人的湖畔露台仪式',
+        '奢华历史别墅配以华丽花园',
+        '质朴优雅的当地餐馆',
+        '新鲜当地食材的意大利美食',
+        '婚前婚后丰富活动：村庄探索、游船之旅',
+        '亲密聚会或盛大庆典皆宜'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '湖畔历史别墅', name_en: 'Lakeside Villa' },
+        { name: '城堡', name_en: 'Castle' },
+        { name: '酒店', name_en: 'Hotel' },
+        { name: '湖畔餐厅', name_en: 'Trattoria' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Bellagio', name_cn: '贝拉焦' },
+        { name: 'Varenna', name_cn: '瓦伦纳' }
+      ]),
+      images: JSON.stringify([
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-header.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-1.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-3.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-2.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-7.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-6.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-5.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-8.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-4.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2023/02/lake-como.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2023/03/lake-como-2-1.jpg'
+      ]),
+      budget_ranges: budgetRanges,
+      guest_capacities: guestCapacities,
+      cover_image: 'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-lake-como-header.jpg',
+      sort_order: 2
+    },
+    {
+      slug: 'tuscany',
+      name: 'Tuscany', name_cn: '托斯卡纳',
+      country: 'Italy', country_cn: '意大利',
+      source_url: 'https://italiandestinationweddings.com/destinations/tuscany/',
+      tagline: '在起伏山丘与阳光葡萄园间说"我愿意"',
+      description: `步入一幅文艺复兴油画般的场景，在托斯卡纳的心脏地带庆祝你们的爱情故事。这片迷人的地区以其起伏的山丘、阳光普照的葡萄园和迷人的中世纪小镇而闻名，提供了一场沉浸在浪漫与永恒之美中的婚礼体验。\n\n想象一下在橄榄树林和柏树交织的画卷中说"我愿意"，托斯卡纳的阳光温暖着你的面庞，微风带着薰衣草和野花的芬芳。想象你的婚宴在闪烁的灯光天篷下，沐浴在金色夕阳的光辉中，欢声笑语充满空气。托斯卡纳迷人的风景提供了如画的背景，将你的婚礼变成童话成真。\n\n除了视觉魅力，托斯卡纳拥有丰富的历史和温暖好客的氛围。历史城堡和古老别墅以其质朴的优雅和迷人的故事，为你的庆典提供了独特的场地。无论你梦想在迷人的葡萄园中举行亲密仪式，还是在宏伟城堡中举办盛大庆典，托斯卡纳都能满足你的每一个愿望。\n\n该地区的美食场景同样提升了你的婚礼体验。新鲜当地食材和传统烹饪方法创造出风味交响乐。从美味的意面到多汁的烤肉和精致的甜点，你的婚礼菜单将真正体现托斯卡纳的美食传承。\n\n托斯卡纳的魅力远不止婚礼当天。探索锡耶纳和圣吉米尼亚诺等迷人村庄，乘坐热气球在起伏山丘上空漫游，或在当地葡萄园品酒。你的宾客可以创造持久的回忆，发现托斯卡纳丰富的历史、令人叹为观止的美景和美酒美食。`,
+      features: JSON.stringify([
+        '起伏山丘、阳光葡萄园、中世纪小镇',
+        '橄榄树林和柏树',
+        '历史城堡和古老别墅',
+        '新鲜当地食材的托斯卡纳美食',
+        '葡萄酒文化：品酒、葡萄园之旅、葡萄酒主题婚礼',
+        '热气球漫游起伏山丘',
+        '亲密仪式或盛大庆典皆宜'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '葡萄园城堡', name_en: 'Vineyard Castle' },
+        { name: '别墅', name_en: 'Villa' },
+        { name: '中世纪村庄', name_en: 'Borgo' },
+        { name: '葡萄园庄园', name_en: 'Vineyard Estate' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Siena', name_cn: '锡耶纳' },
+        { name: 'San Gimignano', name_cn: '圣吉米尼亚诺' }
+      ]),
+      images: JSON.stringify([
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-header.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-1.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-2.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-3.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-8.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-10.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-9.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-5.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-12.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-11.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-6-1.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2023/02/tuscany.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-7.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-4-1.jpg'
+      ]),
+      budget_ranges: budgetRanges,
+      guest_capacities: guestCapacities,
+      cover_image: 'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-tuscany-header.jpg',
+      sort_order: 3
+    },
+    {
+      slug: 'sicily',
+      name: 'Sicily', name_cn: '西西里',
+      country: 'Italy', country_cn: '意大利',
+      source_url: 'https://italiandestinationweddings.com/destinations/sicily/',
+      tagline: '西西里交响曲——当爱情故事遇上历史与魔法',
+      description: `站在历史的中心，阳光普照的广场上。感受西西里温暖的阳光洒在肌肤上，传统小夜曲的旋律编织出迷人的画卷环绕着你的誓言。\n\n想象你的婚宴在古老城堡的墙壁间展开，亲人的欢声笑语在繁星闪烁的夜空下回荡。这一切都在西西里等着你——一座浪漫、历史和迷人之美交织成 symphony 的岛屿。\n\n西西里为你的婚礼日提供了万花筒般的体验。探索点缀着迷人渔村的戏剧性海岸线，见证埃特纳火山令人敬畏的壮丽身影，或沉浸在充满活力的城市能量中。无论你梦想在僻静海滩上举行亲密仪式，还是在华丽的巴洛克宫殿中举办盛大庆典，这座岛屿都能满足你的每一个愿望。\n\n除了视觉盛宴，深入探索西西里丰富的文化画卷。探索诉说着遗忘时代故事的古代遗迹，漫步在充满当地珍宝的热闹集市，拥抱定义西西里人民的热情好客。沉浸在传统音乐的悠扬声中，见证充满激情与活力的民间传统。\n\n尽情品味该地区的美食场景——新鲜地中海风味与世代相传的古老烹饪传统的活力融合。从展示周围水域丰饶的精致海鲜菜肴到丰盛的意面和美味的当地奶酪，你的西西里婚礼菜单将是一曲味觉与芬芳的交响乐。\n\n西西里提供的不仅仅是一个婚礼日，更是为你和宾客打造的难忘发现之旅。探索隐秘小海湾和迷人村庄，踏上埃特纳火山的冒险徒步，或只是在原始海滩上放松身心。`,
+      features: JSON.stringify([
+        '戏剧性海岸线与迷人渔村',
+        '埃特纳火山壮丽景观',
+        '古代遗迹与热闹集市',
+        '传统音乐与民间传统',
+        '新鲜地中海美食：海鲜、意面、当地奶酪',
+        '隐秘小海湾与原始海滩',
+        '巴洛克宫殿',
+        '埃特纳火山徒步冒险'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '古堡', name_en: 'Castle' },
+        { name: '别墅', name_en: 'Villa' },
+        { name: '花园', name_en: 'Garden' },
+        { name: '巴洛克宫殿', name_en: 'Baroque Palace' },
+        { name: '海滩', name_en: 'Beach' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Taormina', name_cn: '陶尔米纳' },
+        { name: 'Catania', name_cn: '卡塔尼亚' }
+      ]),
+      images: JSON.stringify([
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-sicily-1.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-sicily-2.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-sicily-3.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-sicily-4.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-sicily-5.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-sicily-7.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-sicily-6.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2023/03/sicily-1-1.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2023/03/sicily-2-1.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2023/03/sicily-3-1.jpg'
+      ]),
+      budget_ranges: budgetRanges,
+      guest_capacities: guestCapacities,
+      cover_image: 'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-sicily-1.jpg',
+      sort_order: 4
+    },
+    {
+      slug: 'apulia',
+      name: 'Apulia', name_cn: '普利亚',
+      country: 'Italy', country_cn: '意大利',
+      source_url: 'https://italiandestinationweddings.com/destinations/apulia/',
+      tagline: '在普利亚，质朴魅力与永恒之美绽放，为爱情故事绘就完美画卷',
+      description: `想象在古老橄榄树的树荫下低语你的誓言，树叶轻轻摇曳，织成一片自然的爱情天篷。想象你的婚宴在迷人的马塞里亚庄园中心举行，温暖的灯笼光芒照亮欢声笑语，繁星在清澈的夜空中闪烁。这一切都在普利亚等着你——一片质朴魅力与田园风光完美融合的土地，打造一场沉浸在传统与永恒之美中的婚礼体验。\n\n普利亚为你的特别日子展现了一幅迷人的多元景观画卷。探索坐落在悬崖之上的洁白村庄，俯瞰着闪烁的亚得里亚海。漫步在无尽的葡萄园和橄榄树林点缀的起伏山丘间，或穿梭在莱切和奥斯图尼等历史名城的活力街道，每一处都充满了文化瑰宝。无论你梦想在僻静海滩上举行亲密仪式，还是在修复的马塞里亚庄园中举办盛大庆典，普利亚都为你的爱情故事展开提供了真实而难忘的背景。\n\n除了视觉魅力，沉浸在普利亚温暖而丰富的文化中。见证热情的民间传统通过动人的舞蹈和迷人的当地音乐焕发活力，体验定义该地区的热情好客。探索古代遗迹和中世纪城堡，每一处都诉说着往昔的故事。\n\n尽情品味该地区精致的美食场景——庆祝新鲜时令食材和世代相传的传统烹饪方法。从展示亚得里亚海丰饶的精致海鲜菜肴到丰盛的意面和美味的当地奶酪，你的婚礼菜单将是一曲味觉与芬芳的交响乐。\n\n普利亚提供的不仅仅是一个婚礼日，更是为你和宾客打造的难忘发现之旅。探索隐秘小海湾和迷人村庄，在风景如画的乡间骑行，或只是在原始海滩上放松身心。`,
+      features: JSON.stringify([
+        '古老橄榄树作为天然天篷',
+        '迷人的马塞里亚庄园，灯笼映照的招待会',
+        '亚得里亚海悬崖上的洁白村庄',
+        '葡萄园和橄榄树林的起伏山丘',
+        '热情的民间传统：舞蹈与音乐',
+        '古代遗迹和中世纪城堡',
+        '新鲜时令美食：亚得里亚海鲜、意面、当地奶酪',
+        '隐秘小海湾和原始海滩',
+        '乡间骑行游览',
+        '名人之选（贾斯汀·汀布莱克婚礼举办地）'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '城堡', name_en: 'Castle' },
+        { name: '马塞里亚庄园', name_en: 'Masseria' },
+        { name: '海滩', name_en: 'Beach' },
+        { name: '别墅', name_en: 'Villa' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Lecce', name_cn: '莱切' },
+        { name: 'Ostuni', name_cn: '奥斯图尼' }
+      ]),
+      images: JSON.stringify([
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-1.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-3.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-6.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-2.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-5.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-8.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2023/03/apulia-2-1.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-7.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-4.jpg',
+        'https://italiandestinationweddings.com/wp-content/uploads/2023/03/apulia-3-1.jpg'
+      ]),
+      budget_ranges: budgetRanges,
+      guest_capacities: guestCapacities,
+      cover_image: 'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-1.jpg',
+      sort_order: 5
+    }
+  ]
+
+  for (const d of newDests) {
+    const [existing] = await pool.execute('SELECT id FROM crawled_destinations WHERE slug = ?', [d.slug])
+    if (existing.length > 0) continue
+
+    await pool.execute(
+      `INSERT INTO crawled_destinations (slug, name, name_cn, country, country_cn, source_url, tagline, description, features, venue_types, towns, images, budget_ranges, guest_capacities, cover_image, cover_image_url, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [d.slug, d.name, d.name_cn, d.country, d.country_cn, d.source_url, d.tagline, d.description, d.features, d.venue_types, d.towns, d.images, d.budget_ranges, d.guest_capacities, d.cover_image, d.cover_image_url || d.cover_image, d.sort_order]
+    )
+    console.log(`✓ 新增爬取目的地: ${d.name_cn} (${d.slug})`)
+  }
 }
 
 module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable }

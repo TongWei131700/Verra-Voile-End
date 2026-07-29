@@ -82,6 +82,47 @@ router.get('/destination', async (req, res) => {
 })
 
 /**
+ * GET /api/products/crawled-destinations
+ * 获取爬取目的地列表（试验表）
+ */
+router.get('/crawled-destinations', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, slug, name, name_cn, country, country_cn, source_url, tagline,
+              LEFT(description, 200) AS description_preview,
+              cover_image, features, venue_types, towns, budget_ranges, guest_capacities,
+              sort_order, created_at
+       FROM crawled_destinations
+       ORDER BY sort_order ASC`
+    )
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('获取爬取目的地列表失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-destinations/:slug
+ * 获取单个爬取目的地详情（试验表）
+ */
+router.get('/crawled-destinations/:slug', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM crawled_destinations WHERE slug = ?`,
+      [req.params.slug]
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '目的地不存在' })
+    }
+    res.json({ success: true, data: rows[0] })
+  } catch (error) {
+    console.error('获取爬取目的地详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
  * GET /api/products/:moduleId
  * 获取指定种类及其商品列表（从对应的独立表查询）
  */

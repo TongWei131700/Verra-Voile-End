@@ -71,14 +71,14 @@ expect {
 EXPECT_EOF
 ```
 
-### 5. 重启服务
+### 5. 停止服务并释放端口
 
-由于 .env 已从打包中排除，服务器上的 .env 不会被覆盖，直接重启即可：
+**必须先杀端口再重启**，否则旧进程占用端口 3000 会导致 EADDRINUSE 错误，服务陷入崩溃循环：
 
 ```bash
 expect << 'EXPECT_EOF'
 set timeout 30
-spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "pm2 restart verra-api && sleep 2 && curl -s http://localhost:3000/health"
+spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "pm2 stop verra-api && sleep 1 && fuser -k 3000/tcp 2>/dev/null; sleep 2 && echo PORT_CLEARED"
 expect {
     "password:" {
         send "TongWei131700\r"
@@ -89,11 +89,29 @@ expect {
 EXPECT_EOF
 ```
 
-### 6. 验证部署
+### 6. 启动服务
+
+端口释放后再启动，避免端口冲突：
+
+```bash
+expect << 'EXPECT_EOF'
+set timeout 30
+spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "pm2 start verra-api && sleep 3 && curl -s http://localhost:3000/health"
+expect {
+    "password:" {
+        send "TongWei131700\r"
+        exp_continue
+    }
+    eof
+}
+EXPECT_EOF
+```
+
+### 7. 验证部署
 
 健康检查返回 `{"status":"ok",...}` 即部署成功。
 
-### 7. Git 版本控制（部署完成后执行）
+### 8. Git 版本控制（部署完成后执行）
 
 部署成功后，将所有改动（包括部署过程中产生的新文件）提交并切换新分支：
 
