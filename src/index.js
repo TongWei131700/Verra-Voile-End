@@ -14,6 +14,7 @@ const cartRouter = require('./routes/cart')
 const chatNotifyRouter = require('./routes/chat')
 const productsRouter = require('./routes/products')
 const versionRouter = require('./routes/version')
+const crawlRouter = require('./routes/crawl')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -34,6 +35,7 @@ app.use('/api/cart', cartRouter)
 app.use('/api/chat', chatNotifyRouter)
 app.use('/api/products', productsRouter)
 app.use('/api/version', versionRouter)
+app.use('/api/crawl', crawlRouter)
 
 // 健康检查
 app.get('/health', (req, res) => {
@@ -59,6 +61,8 @@ async function start() {
       console.log(`  - GET  /api/cart          获取购物车`)
       console.log(`  - POST /api/cart/sync     同步购物车`)
       console.log(`  - GET  /health           健康检查`)
+      console.log(`  - POST /api/crawl/start    触发爬取任务`)
+      console.log(`  - GET  /api/crawl/state    查看爬取状态`)
     })
   } catch (error) {
     console.error('启动失败:', error.message)
