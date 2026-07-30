@@ -403,6 +403,7 @@ async function ensureCrawledDestinationsTable(pool) {
       images JSON COMMENT '图片URL列表（JSON数组）',
       budget_ranges JSON COMMENT '预算区间（JSON数组）',
       guest_capacities JSON COMMENT '宾客人数选项（JSON数组）',
+      faq JSON COMMENT '常见问题（JSON数组）',
       cover_image VARCHAR(500) DEFAULT '' COMMENT '封面图URL',
       sort_order INT DEFAULT 0 COMMENT '排序权重',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -498,9 +499,9 @@ async function seedCrawledDestinations(pool) {
 
   for (const d of destinations) {
     await pool.execute(
-      `INSERT INTO crawled_destinations (slug, name, name_cn, country, country_cn, source_url, tagline, description, features, venue_types, towns, images, budget_ranges, guest_capacities, cover_image, cover_image_url, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [d.slug, d.name, d.name_cn, d.country, d.country_cn, d.source_url, d.tagline, d.description, d.features, d.venue_types, d.towns, d.images, d.budget_ranges, d.guest_capacities, d.cover_image, d.cover_image_url || d.cover_image, d.sort_order]
+      `INSERT INTO crawled_destinations (slug, name, name_cn, country, country_cn, source_url, tagline, description, features, venue_types, towns, images, budget_ranges, guest_capacities, faq, cover_image, cover_image_url, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [d.slug, d.name, d.name_cn, d.country, d.country_cn, d.source_url, d.tagline, d.description, d.features, d.venue_types, d.towns, d.images, d.budget_ranges, d.guest_capacities, d.faq || null, d.cover_image, d.cover_image_url || d.cover_image, d.sort_order]
     )
   }
   console.log(`✓ 爬取目的地种子数据已插入（${destinations.length} 条）`)
@@ -730,6 +731,359 @@ async function insertNewCrawledDestinations(pool) {
       guest_capacities: guestCapacities,
       cover_image: 'https://italiandestinationweddings.com/wp-content/uploads/2024/04/Italiandestinationweddings-destinations-apulia-1.jpg',
       sort_order: 5
+    },
+    // ===== 法国目的地 =====
+    {
+      slug: 'provence',
+      name: 'Provence', name_cn: '普罗旺斯',
+      country: 'France', country_cn: '法国',
+      source_url: 'https://www.frenchdestinationwedding.com/wedding-destinations/provence/',
+      tagline: '在薰衣草花海与阳光田园间，书写永恒的爱情篇章',
+      description: `想象一下，在普罗旺斯紫色的薰衣草田中交换誓言，空气中弥漫着薰衣草和迷迭香的芬芳。想象你的婚宴在古老的石头庄园中举行，阳光透过百年梧桐树洒下斑驳的光影。这一切，都在普罗旺斯等着你——一个将浪漫融入每一寸土地的地方。\n\n这片位于法国东南部的梦幻之地，以其起伏的薰衣草田、阳光普照的葡萄园和迷人的中世纪村庄而闻名。在这里，每一条乡间小路都通向一幅油画般的风景，每一座古老的石头建筑都承载着几个世纪的故事。\n\n普罗旺斯为你的婚礼提供了无限可能。在私人庄园中举办亲密的乡村风格庆典，或在修复的文艺复兴城堡中举行盛大仪式。无论你的梦想是质朴的田园婚礼还是优雅的法式盛宴，这片土地都能完美实现。\n\n美食方面，普罗旺斯以新鲜时令食材、橄榄油、香草和地中海风味闻名。你的婚礼菜单将是一场味蕾的普罗旺斯之旅，从精致的南法料理到醇厚的当地葡萄酒，每一口都是对美好生活的礼赞。`,
+      features: JSON.stringify([
+        '紫色薰衣草田中的浪漫仪式',
+        '空气中弥漫薰衣草与迷迭香芬芳',
+        '古老石头庄园中的婚宴',
+        '百年梧桐树下的斑驳光影',
+        '中世纪村庄与文艺复兴城堡',
+        '南法乡村风格或优雅法式盛宴',
+        '新鲜时令食材与普罗旺斯美食',
+        '醇厚的当地葡萄酒文化'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '石头庄园', name_en: 'Mas (Stone Farmhouse)' },
+        { name: '文艺复兴城堡', name_en: 'Renaissance Castle' },
+        { name: '葡萄园庄园', name_en: 'Vineyard Estate' },
+        { name: '薰衣草花园', name_en: 'Lavender Garden' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Gordes', name_cn: '戈尔德' },
+        { name: 'Roussillon', name_cn: '鲁西永' },
+        { name: 'Aix-en-Provence', name_cn: '艾克斯' }
+      ]),
+      images: JSON.stringify([
+        'https://images.unsplash.com/photo-1499002238440-d264edd596ec?w=1200',
+        'https://images.unsplash.com/photo-1533104816931-20fa691ff6ca?w=1200',
+        'https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=1200',
+        'https://images.unsplash.com/photo-1504512485720-7d83a16ee930?w=1200',
+        'https://images.unsplash.com/photo-1559827260-dc66d5281a48?w=1200'
+      ]),
+      budget_ranges: JSON.stringify([
+        { label: '3万 - 6万欧元', min: 30000, max: 60000 },
+        { label: '6万 - 12万欧元', min: 60000, max: 120000 },
+        { label: '12万 - 20万欧元', min: 120000, max: 200000 },
+        { label: '20万欧元以上', min: 200000, max: null }
+      ]),
+      guest_capacities: JSON.stringify(['0-30人', '30-60人', '60-100人', '100人以上']),
+      cover_image: 'https://images.unsplash.com/photo-1499002238440-d264edd596ec?w=1200',
+      sort_order: 10
+    },
+    {
+      slug: 'french-riviera',
+      name: 'French Riviera', name_cn: '蔚蓝海岸',
+      country: 'France', country_cn: '法国',
+      source_url: 'https://www.frenchdestinationwedding.com/wedding-destinations/french-riviera/',
+      tagline: '在地中海的蔚蓝海岸线上，让爱情与海天一色',
+      description: `想象在法国蔚蓝海岸的奢华露台上，俯瞰地中海的碧蓝海水交换誓言。海风轻柔地拂过面庞，阳光在波光粼粼的海面上跳跃，远处是尼斯和戛纳迷人的天际线。\n\n蔚蓝海岸是世界上最负盛名的婚礼目的地之一。这里汇聚了奢华与自然的完美结合——从摩纳哥的皇家气派到圣特罗佩的波西米亚风情，从戛纳的电影 glamour 到尼斯的老城魅力。\n\n在悬崖上的私人别墅中举办亲密仪式，或在五星级宫殿酒店中举行盛大庆典。你的婚宴可以是海滩上的浪漫晚宴，也可以是山顶露台上的星光派对。\n\n蔚蓝海岸的美食融合了普罗旺斯的田园风味与地中海的鲜美。新鲜海鲜、精致法餐和顶级香槟，为你的婚礼增添无与伦比的味觉享受。`,
+      features: JSON.stringify([
+        '地中海碧蓝海水的悬崖露台仪式',
+        '尼斯、戛纳、圣特罗佩的迷人天际线',
+        '奢华私人别墅或宫殿酒店',
+        '海滩浪漫晚宴或山顶星光派对',
+        '摩纳哥的皇家气派',
+        '精致法餐与顶级香槟',
+        '世界顶级婚礼目的地',
+        '全年温和的地中海气候'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '悬崖别墅', name_en: 'Cliffside Villa' },
+        { name: '宫殿酒店', name_en: 'Palace Hotel' },
+        { name: '海滩', name_en: 'Beach' },
+        { name: '游艇', name_en: 'Yacht' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Nice', name_cn: '尼斯' },
+        { name: 'Cannes', name_cn: '戛纳' },
+        { name: 'Saint-Tropez', name_cn: '圣特罗佩' },
+        { name: 'Monaco', name_cn: '摩纳哥' }
+      ]),
+      images: JSON.stringify([
+        'https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=1200',
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200',
+        'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=1200',
+        'https://images.unsplash.com/photo-1504681869696-d977211a5f4c?w=1200',
+        'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?w=1200'
+      ]),
+      budget_ranges: JSON.stringify([
+        { label: '5万 - 10万欧元', min: 50000, max: 100000 },
+        { label: '10万 - 20万欧元', min: 100000, max: 200000 },
+        { label: '20万 - 40万欧元', min: 200000, max: 400000 },
+        { label: '40万欧元以上', min: 400000, max: null }
+      ]),
+      guest_capacities: JSON.stringify(['0-30人', '30-60人', '60-100人', '100人以上']),
+      cover_image: 'https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=1200',
+      sort_order: 11
+    },
+    {
+      slug: 'paris',
+      name: 'Paris', name_cn: '巴黎',
+      country: 'France', country_cn: '法国',
+      source_url: 'https://www.frenchdestinationwedding.com/wedding-destinations/paris/',
+      tagline: '在光之城，让埃菲尔铁塔见证你们的永恒之约',
+      description: `巴黎，光之城，全世界最浪漫的首都。想象在埃菲尔铁塔的璀璨灯光下交换誓言，塞纳河的柔波倒映着你们的幸福笑容。\n\n这座城市本身就是爱情的象征。从卢浮宫的艺术瑰宝到巴黎圣母院的哥特式庄严，从香榭丽舍大街的优雅到蒙马特的艺术气息，巴黎的每一个角落都在诉说着浪漫的故事。\n\n在塞纳河畔的私人公馆中举办优雅的法式婚宴，或在五星級历史宫殿酒店中举行盛大庆典。你的婚礼可以是在凡尔赛宫镜厅中的皇家盛宴，也可以是在蒙马特小教堂旁的温馨聚会。\n\n巴黎的美食代表了法式烹饪的最高境界。从精致的米其林星级餐厅到经典的法式小酒馆，你的婚礼菜单将是一场味蕾的奢华之旅。`,
+      features: JSON.stringify([
+        '埃菲尔铁塔灯光下的浪漫仪式',
+        '塞纳河畔的优雅婚宴',
+        '卢浮宫、巴黎圣母院等世界级地标',
+        '凡尔赛宫镜厅的皇家盛宴',
+        '蒙马特的艺术气息',
+        '米其林星级法式美食',
+        '历史宫殿酒店与私人公馆',
+        '全世界最浪漫的首都'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '历史宫殿酒店', name_en: 'Historic Palace Hotel' },
+        { name: '塞纳河畔公馆', name_en: 'Parisian Mansion' },
+        { name: '私人庄园', name_en: 'Private Estate' },
+        { name: '餐厅', name_en: 'Restaurant' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Paris', name_cn: '巴黎' },
+        { name: 'Versailles', name_cn: '凡尔赛' }
+      ]),
+      images: JSON.stringify([
+        'https://images.unsplash.com/photo-1502602682916-037bb08c01a9?w=1200',
+        'https://images.unsplash.com/photo-1499856871958-5b964d297916?w=1200',
+        'https://images.unsplash.com/photo-1431274172761-fca41d930114?w=1200',
+        'https://images.unsplash.com/photo-1478391679764-b2d8b3cd1e94?w=1200',
+        'https://images.unsplash.com/photo-1520939817895-060bdaf4fe1b?w=1200'
+      ]),
+      budget_ranges: JSON.stringify([
+        { label: '5万 - 10万欧元', min: 50000, max: 100000 },
+        { label: '10万 - 25万欧元', min: 100000, max: 250000 },
+        { label: '25万 - 50万欧元', min: 250000, max: 500000 },
+        { label: '50万欧元以上', min: 500000, max: null }
+      ]),
+      guest_capacities: JSON.stringify(['0-30人', '30-60人', '60-100人', '100人以上']),
+      cover_image: 'https://images.unsplash.com/photo-1502602682916-037bb08c01a9?w=1200',
+      sort_order: 12
+    },
+    {
+      slug: 'loire-valley',
+      name: 'Loire Valley', name_cn: '卢瓦尔河谷',
+      country: 'France', country_cn: '法国',
+      source_url: 'https://www.frenchdestinationwedding.com/wedding-destinations/loire-valley/',
+      tagline: '在童话城堡与皇家花园间，开启你们的浪漫篇章',
+      description: `卢瓦尔河谷，法国的花园，一片遍布童话城堡和皇家宫殿的土地。想象在一座拥有数百年历史的城堡前，在精心修剪的法式花园中交换誓言。\n\n这条联合国教科文组织世界遗产河谷，以其文艺复兴时期的城堡、茂密的森林和优雅的葡萄园而闻名。这里是法国国王和贵族曾经狩猎和度假的地方，如今成为梦想婚礼的完美舞台。\n\n在私人城堡中举办中世纪风格的盛大婚宴，或在精致的庄园中举行优雅的户外庆典。卢瓦尔河谷的每个角落都散发着皇家气派与浪漫情怀。\n\n这里的美食同样令人惊叹——新鲜的河鱼、当地奶酪和图赖讷地区的优质葡萄酒，为你的婚礼增添地道的法式风味。`,
+      features: JSON.stringify([
+        '童话般的文艺复兴城堡',
+        '联合国教科文组织世界遗产',
+        '精心修剪的法式花园',
+        '皇家狩猎森林与葡萄园',
+        '私人城堡的中世纪风格婚宴',
+        '图赖讷地区的优质葡萄酒',
+        '优雅的户外花园仪式',
+        '法国王室的历史氛围'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '私人城堡', name_en: 'Private Château' },
+        { name: '庄园', name_en: 'Manor House' },
+        { name: '花园', name_en: 'Garden' },
+        { name: '葡萄园', name_en: 'Vineyard' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Chambord', name_cn: '尚博尔' },
+        { name: 'Chenonceau', name_cn: '舍农索' },
+        { name: 'Tours', name_cn: '图尔' }
+      ]),
+      images: JSON.stringify([
+        'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=1200',
+        'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=1200',
+        'https://images.unsplash.com/photo-1515542622106-78bda8ba0e5b?w=1200',
+        'https://images.unsplash.com/photo-1559827260-dc66d5281a48?w=1200',
+        'https://images.unsplash.com/photo-1504512485720-7d83a16ee930?w=1200'
+      ]),
+      budget_ranges: JSON.stringify([
+        { label: '3万 - 6万欧元', min: 30000, max: 60000 },
+        { label: '6万 - 12万欧元', min: 60000, max: 120000 },
+        { label: '12万 - 25万欧元', min: 120000, max: 250000 },
+        { label: '25万欧元以上', min: 250000, max: null }
+      ]),
+      guest_capacities: JSON.stringify(['0-40人', '40-80人', '80-120人', '120人以上']),
+      cover_image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=1200',
+      sort_order: 13
+    },
+    {
+      slug: 'bordeaux',
+      name: 'Bordeaux', name_cn: '波尔多',
+      country: 'France', country_cn: '法国',
+      source_url: 'https://www.frenchdestinationwedding.com/wedding-destinations/bordeaux/',
+      tagline: '在葡萄酒之都，品味爱情与生活的醇厚芬芳',
+      description: `波尔多，世界葡萄酒之都，一座将优雅与热情完美融合的法国城市。想象在列级酒庄的葡萄园中，在金色夕阳的映照下交换誓言，空气中弥漫着葡萄的芬芳。\n\n这座城市以其18世纪的经典建筑、世界级的葡萄酒庄园和精致的美食文化而闻名。波尔多的历史城区是联合国教科文组织世界遗产，拥有令人叹为观止的新古典主义建筑群。\n\n在私人酒庄城堡中举办以葡萄酒为主题的盛大婚宴，或在波尔多市中心的优雅公馆中举行精致仪式。无论你的梦想是田园诗般的乡村婚礼还是都市优雅的现代庆典，波尔多都能完美实现。\n\n波尔多的美食与葡萄酒文化是世界顶级的。从圣埃美隆的列级名庄到 Arcachon 湾的新鲜生蚝，你的婚礼菜单将是一场味蕾的波尔多之旅。`,
+      features: JSON.stringify([
+        '列级酒庄葡萄园中的浪漫仪式',
+        '世界葡萄酒之都的醇厚魅力',
+        '联合国教科文组织历史城区',
+        '私人酒庄城堡的盛大婚宴',
+        '圣埃美隆列级名庄品酒',
+        'Arcachon湾新鲜生蚝',
+        '18世纪新古典主义建筑',
+        '田园诗般的乡村与都市优雅'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '酒庄城堡', name_en: 'Wine Château' },
+        { name: '城市公馆', name_en: 'Townhouse' },
+        { name: '葡萄园', name_en: 'Vineyard' },
+        { name: '餐厅', name_en: 'Restaurant' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Bordeaux', name_cn: '波尔多' },
+        { name: 'Saint-Émilion', name_cn: '圣埃美隆' },
+        { name: 'Arcachon', name_cn: '阿卡雄' }
+      ]),
+      images: JSON.stringify([
+        'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=1200',
+        'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=1200',
+        'https://images.unsplash.com/photo-1559827260-dc66d5281a48?w=1200',
+        'https://images.unsplash.com/photo-1504512485720-7d83a16ee930?w=1200',
+        'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=1200'
+      ]),
+      budget_ranges: JSON.stringify([
+        { label: '3万 - 6万欧元', min: 30000, max: 60000 },
+        { label: '6万 - 12万欧元', min: 60000, max: 120000 },
+        { label: '12万 - 20万欧元', min: 120000, max: 200000 },
+        { label: '20万欧元以上', min: 200000, max: null }
+      ]),
+      guest_capacities: JSON.stringify(['0-40人', '40-80人', '80-120人', '120人以上']),
+      cover_image: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=1200',
+      sort_order: 14
+    },
+    // ===== 希腊婚礼场地 =====
+    {
+      slug: 'alsos-nimfon',
+      name: 'Alsos Nimfon', name_cn: '森林女神庄园',
+      country: 'Greece', country_cn: '希腊',
+      source_url: 'https://www.weddingwire.com/biz/alsos-nimfon/7ce63ab1d0565691.html',
+      tagline: '雅典近郊的湖畔庄园，在自然与湖光中见证永恒誓约',
+      description: `Alsos Nimfon 是位于希腊 Oropos 的婚礼与活动场地，距雅典约30公里。这座占地六英亩的私人庄园是新人交换誓言的宁静休憩之所。自然环境、湖景和敬业的团队确保每对新人都拥有难忘的体验。\n\n俯瞰 Marathonas 湖，Alsos Nimfon 为新人在大自然中举办婚礼提供迷人氛围。郁郁葱葱的花园、私人游泳池和繁茂的树木遍布整个空间，为仪式和婚宴打造出引人注目的背景。室内场地之一是 St. Konstantinos & Eleni 教堂，是举行传统仪式的场所。室内宴会厅是一栋多功能建筑，玻璃墙环绕整个房间，确保每位宾客都不错过美景，还配有可伸缩屋顶，让自然光洒满整个空间，可容纳多达500位宾客。户外露台和草坪区域可容纳多达750人。此外，还提供私人套房和花园，可用作化妆准备套房或蜜月套房。\n\nAlsos Nimfon 拥有现场婚礼策划团队，帮助新人实现无缝、无压力的筹备过程。场地的内部烹饪团队 Anagnostopoulos Catering 将根据您的愿景定制菜单。知名调酒师为宾客提供各种饮品。团队还将与您联系其可信赖的供应商名单，从设计师到花艺师，让您的婚礼愿景成为现实。\n\nAlsos Nimfon 因其令人惊叹的场地环境和优质服务而备受新人好评。餐饮被评价为令人难忘，活动工作人员也以细心和友善著称。`,
+      features: JSON.stringify([
+        '俯瞰Marathonas湖的六英亩私人庄园',
+        '郁郁葱葱的花园与私人游泳池',
+        'St. Konstantinos & Eleni 传统教堂',
+        '玻璃墙环绕的多功能室内宴会厅（可容纳500人）',
+        '可伸缩屋顶，自然光洒满全场',
+        '户外露台与草坪区域（可容纳750人）',
+        '私人套房与花园（化妆/蜜月）',
+        '现场婚礼策划团队',
+        '内部烹饪团队 Anagnostopoulos Catering',
+        '知名调酒师与可信赖供应商推荐',
+        'WeddingWire 5.0满分评分，100%新人推荐',
+        '20年经营经验，Google 4.8分（1033条评论）'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '农场/牧场', name_en: 'Farm/Ranch' },
+        { name: '花园', name_en: 'Garden' },
+        { name: '度假村', name_en: 'Resort' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Oropos', name_cn: '奥罗波斯' },
+        { name: 'Marathonas', name_cn: '马拉松纳' }
+      ]),
+      images: JSON.stringify([
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpg/1_51_2081127-172674857697709.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpg/nikos-tselios-dji-0277_51_2081127-172674857642556.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/png/4_51_2081127-178101497998875.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/png/3_51_2081127-178101497962250.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpeg/whatsapp-image-2026-05-27-at-5-23-56-pm_51_2081127-178101451781797.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpeg/whatsapp-image-2026-05-25-at-5-39-45-pm_51_2081127-178101451732242.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpg/2_51_2081127-172674857671498.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpg/3_51_2081127-172674857654912.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpg/5_51_2081127-172674857685034.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpg/6_51_2081127-172674857639156.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpg/7_51_2081127-172674857662845.jpeg',
+        'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpg/8_51_2081127-172674857648391.jpeg'
+      ]),
+      budget_ranges: JSON.stringify([
+        { label: '$6,200 起步', min: 6200, max: 6200 },
+        { label: '$7,600 新人通常花费', min: 7600, max: 7600 }
+      ]),
+      guest_capacities: JSON.stringify(['50-500人（室内）', '50-750人（户外）', '最多850人']),
+      faq: JSON.stringify([
+        { q: '起始场地费包含哪些项目？', a: '椅子、桌布、桌子、停车、 Setup、清洁、新娘套房、餐具、玻璃器皿' },
+        { q: '婚礼餐饮费用包含哪些？', a: '切蛋糕、甜点、服务员、婚礼蛋糕' },
+        { q: '酒吧服务起始价格包含哪些？', a: '调酒师、家酿烈酒、家酿葡萄酒' },
+        { q: '场地有什么特点？', a: '农场/牧场、花园、公园' },
+        { q: '提供哪些室内/室外选择？', a: '室内、有遮盖室外、无遮盖室外' },
+        { q: '提供哪些婚礼活动类型？', a: '仪式、婚宴、新娘派对、订婚派对、私奔、彩排晚餐' },
+        { q: '提供哪些活动服务？', a: '清洁、活动租赁、新娘准备间、Setup' },
+        { q: '提供哪些餐饮选择？', a: '自助餐、鸡尾酒会、甜点、家庭式、小食、外部蛋糕、装盘、服务员、摊位' },
+        { q: '提供哪些酒吧服务？', a: '调酒师、开放式酒吧、优质烈酒、特调饮品' },
+        { q: '提供哪些家具和装饰？', a: '音响设备、椅子、舞池、家具、灯光、桌子、帐篷、帐篷配件' }
+      ]),
+      cover_image: 'https://cdn0.weddingwire.com/vendor/721180/3_2/1920/jpg/nikos-tselios-dji-0277_51_2081127-172674857642556.jpeg',
+      sort_order: 20
+    },
+    {
+      slug: 'villa-bordeaux-santorini',
+      name: 'Villa Bordeaux Santorini', name_cn: '波尔多圣托里尼别墅',
+      country: 'Greece', country_cn: '希腊',
+      source_url: 'https://www.weddingwire.com/biz/villa-bordeaux-santorini/dddd83f70e6872e8.html',
+      tagline: '圣托里尼悬崖上的奢华婚礼殿堂，爱琴海日落见证永恒誓约',
+      description: `Villa Bordeaux Santorini 是位于希腊 Fira 的目的地婚礼场地。坐落于 Caldera 悬崖之上，这个奢华的环境提供了爱琴海和岛屿的壮丽景色作为仪式背景。现场团队在整个婚礼周末陪伴新人，确保他们充分享受婚姻生活的第一步。其全包套餐、内部餐饮和奢华住宿可以将任何新人的婚礼日变成一场难忘的盛事。\n\n场地与容量\nVilla Bordeaux Santorini 始建于19世纪，经过精心翻新，将历史底蕴与现代美学完美融合。它坐落在岛上热闹的首府 Fira，为新人和宾客营造独一无二的氛围。别墅可容纳多达100位宾客。新人可以在露台或阳台上交换誓言，以火山和大海作为天然祭坛背景。露台还设有一个放松的无边泳池，可欣赏全景。泳池周围是如画的用餐区，适合亲密的彩排或招待晚餐。四间高品质套房可供新人和宾客在婚礼周末享受奢华住宿。\n\n服务\nVilla Bordeaux Santorini 的团队将与您密切合作，帮助您策划目的地婚礼。他们提供场地布置和拆卸服务，让新人有更多时间专注于重要的事情。桌子、椅子和桌布将按您喜欢的任何形式提供和安排。\n\n美食\n别墅的主要餐饮服务商 La Colline Restaurant 提供多种时令菜肴，从新鲜海鲜到炭烤创意料理，以及鸡尾酒会的小食选择。宾客还可以在夜晚结束时享用甜点，包括冰沙、苹果派和令人垂涎的巧克力作品。\n\n你会爱上这里的原因\n新人可以在海滩上以壮丽的海洋为背景交换誓言，然后在舞池上跳舞，度过难忘的庆典。`,
+      features: JSON.stringify([
+        '19世纪历史建筑，精心翻新融合现代美学',
+        'Caldera悬崖之上，爱琴海与火山全景',
+        '无边泳池与露台仪式场地',
+        '四间高品质奢华套房（Aqua/Lava/Terra/Aeolus）',
+        '内部餐饮 La Colline Restaurant',
+        '可容纳2-100位宾客',
+        '全包式婚礼策划服务',
+        '穿梭巴士接送服务',
+        '宠物友好',
+        'Google 4.8分（139条评论）',
+        '屋顶、水滨、历史建筑多重风格',
+        '鸡尾酒吧与甜品台'
+      ]),
+      venue_types: JSON.stringify([
+        { name: '度假村', name_en: 'Resort' },
+        { name: '历史建筑', name_en: 'Historic Building' },
+        { name: '水滨', name_en: 'Waterfront' }
+      ]),
+      towns: JSON.stringify([
+        { name: 'Fira', name_cn: '菲拉' }
+      ]),
+      images: JSON.stringify([
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/rt0b6687_51_2039029-162463375989937.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/6_51_2039029-162463368872777.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/28_51_2039029-164310382026963.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/rt0b1321_51_2039029-162463452331286.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/rt0b1324_51_2039029-162463373849095.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/rt0b1289_51_2039029-162463373453013.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/rt0b6672_51_2039029-162463376367330.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/56_51_2039029-162463368595158.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/drz-bvillas-q1a7502_51_2039029-162463372025875.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/villabordeaux-23099413-1124127347690755-5317397661110763520-n_51_2039029-162463376083995.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/santorinivillabordeaux5260v-p_51_2039029-162463378110578.jpeg',
+        'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/santorinivillabordeaux3872v-p-1_51_2039029-164312017280069.jpeg'
+      ]),
+      budget_ranges: JSON.stringify([
+        { label: '仪式起步价', min: 6500, max: null },
+        { label: '婚宴起步价', min: 6500, max: null },
+        { label: '酒吧服务/人', min: 200, max: null }
+      ]),
+      guest_capacities: JSON.stringify(['2-60人', '60-100人']),
+      faq: JSON.stringify([
+        { q: 'Villa Bordeaux Santorini 的起始场地费包含哪些项目？', a: '椅子、桌布、桌子' },
+        { q: 'Villa Bordeaux Santorini 的婚礼餐饮费用包含哪些项目？', a: '甜点、服务员' },
+        { q: 'Villa Bordeaux Santorini 的酒吧服务起始价格包含哪些？', a: '调酒师、香槟祝酒、家酿啤酒、家酿烈酒、家酿葡萄酒、限量酒吧、开放式酒吧、优质烈酒、特调饮品、精酿啤酒、特选葡萄酒' },
+        { q: 'Villa Bordeaux Santorini 在场地类型、风格和位置方面有什么特点？', a: '历史建筑、酒店、阁楼、庄园、码头、度假村、餐厅、屋顶、水滨、酒庄' },
+        { q: 'Villa Bordeaux Santorini 提供哪些室内/室外选择？', a: '室内、无遮盖室外' },
+        { q: 'Villa Bordeaux Santorini 提供哪些类型的婚礼活动？', a: '仪式、婚宴、订婚派对、私奔、彩排晚餐' },
+        { q: 'Villa Bordeaux Santorini 为婚礼活动提供哪些服务？', a: '住宿、酒吧服务、餐饮服务、清洁、活动策划、活动租赁、新娘准备间、宠物友好、WiFi' },
+        { q: 'Villa Bordeaux Santorini 提供哪些家具和装饰？', a: '椅子、椅套、垂幔、家具、桌子' }
+      ]),
+      cover_image: 'https://cdn0.weddingwire.com/vendor/920930/3_2/1920/jpg/6_51_2039029-162463368872777.jpeg',
+      sort_order: 21
     }
   ]
 
@@ -738,9 +1092,9 @@ async function insertNewCrawledDestinations(pool) {
     if (existing.length > 0) continue
 
     await pool.execute(
-      `INSERT INTO crawled_destinations (slug, name, name_cn, country, country_cn, source_url, tagline, description, features, venue_types, towns, images, budget_ranges, guest_capacities, cover_image, cover_image_url, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [d.slug, d.name, d.name_cn, d.country, d.country_cn, d.source_url, d.tagline, d.description, d.features, d.venue_types, d.towns, d.images, d.budget_ranges, d.guest_capacities, d.cover_image, d.cover_image_url || d.cover_image, d.sort_order]
+      `INSERT INTO crawled_destinations (slug, name, name_cn, country, country_cn, source_url, tagline, description, features, venue_types, towns, images, budget_ranges, guest_capacities, faq, cover_image, cover_image_url, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [d.slug, d.name, d.name_cn, d.country, d.country_cn, d.source_url, d.tagline, d.description, d.features, d.venue_types, d.towns, d.images, d.budget_ranges, d.guest_capacities, d.faq || null, d.cover_image, d.cover_image_url || d.cover_image, d.sort_order]
     )
     console.log(`✓ 新增爬取目的地: ${d.name_cn} (${d.slug})`)
   }
