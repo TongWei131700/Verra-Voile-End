@@ -107,11 +107,55 @@ expect {
 EXPECT_EOF
 ```
 
-### 7. 验证部署
+### 7. 同步本地数据库到服务器
 
-健康检查返回 `{"status":"ok",...}` 即部署成功。
+将本地 `verra_voile` 数据库的 `crawled_destinations` 表全量导出并导入服务器，确保线上数据与本地一致：
 
-### 8. Git 版本控制（部署完成后执行）
+```bash
+# 1. 本地导出全表（含表结构 + 数据）
+/usr/local/mysql/bin/mysqldump -u root verra_voile crawled_destinations --skip-lock-tables --routines --triggers > /tmp/full_crawled_destinations.sql
+
+# 2. 上传 SQL 到服务器
+expect << 'EXPECT_EOF'
+set timeout 30
+spawn scp -o StrictHostKeyChecking=no /tmp/full_crawled_destinations.sql root@47.99.138.250:/tmp/
+expect {
+    "password:" {
+        send "TongWei131700\r"
+        exp_continue
+    }
+    eof
+}
+EXPECT_EOF
+
+# 3. 服务器导入（DROP + CREATE + INSERT 全量替换）
+expect << 'EXPECT_EOF'
+set timeout 30
+spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "mysql -h 127.0.0.1 -P 13306 -u root -p'caoqiangiot@123' verra_voile < /tmp/full_crawled_destinations.sql && echo DB_SYNC_OK"
+expect {
+    "password:" {
+        send "TongWei131700\r"
+        exp_continue
+    }
+    eof
+}
+EXPECT_EOF
+```
+
+> **注意**：此步骤会全量覆盖 `crawled_destinations` 表，服务器上的旧数据会被本地数据完全替换。
+
+### 8. 验证部署
+
+健康检查 + 数据库验证：
+
+```bash
+# API 健康检查
+curl -s http://47.99.138.250/api/products/crawled-destinations | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'数据: {len(d.get(\"data\",[]))} 条')"
+```
+
+确认返回 200 且数据条数与本地一致。
+
+### 9. Git 版本控制（部署完成后执行）
 
 部署成功后，将所有改动（包括部署过程中产生的新文件）提交并切换新分支：
 
@@ -164,4 +208,5 @@ cd /var/www/verra-voile-end && pm2 start src/index.js --name verra-voile-api && 
 - 打包状态
 - 上传结果
 - 健康检查 HTTP 响应
+- 数据库同步结果（记录条数对比）
 - PM2 进程状态
