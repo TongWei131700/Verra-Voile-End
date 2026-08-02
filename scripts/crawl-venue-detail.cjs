@@ -32,7 +32,7 @@ async function main() {
   // 方式1: 从 img 标签提取，只取 vendor 图片
   $('img').each((_, el) => {
     const src = $(el).attr('src') || $(el).attr('data-src') || ''
-    if (src && (src.includes('cdn0.mariages.net/vendor/') || src.includes('cdn0.weddingwire.com/vendor/'))) {
+    if (src && (src.includes('cdn0.mariages.net/vendor/') || src.includes('cdn0.weddingwire.com/vendor/') || src.includes('cdn0.hitched.co.uk/vendor/'))) {
       // 替换为最大尺寸 1920: /vendor/XXXX/3_2/960/ -> /vendor/XXXX/3_2/1920/
       const hd = src.replace(/(\/vendor\/\d+\/\d+_\d+)\/\d+(\/)/, '$1/1920$2').replace(/\?.*$/, '')
       imageSet.add(hd)
@@ -43,7 +43,7 @@ async function main() {
     try {
       const json = JSON.parse($(el).html())
       const str = JSON.stringify(json)
-      const matches = str.match(/https?:\/\/cdn0\.(weddingwire|mariages)\.com\/vendor\/[^"\\]+\.(jpeg|jpg|png)/gi)
+      const matches = str.match(/https?:\/\/cdn0\.(weddingwire|mariages|hitched)\.com\/vendor\/[^"\\]+\.(jpeg|jpg|png)/gi)
       if (matches) {
         matches.forEach(url => {
           const hd = url.replace(/(\/vendor\/\d+\/\d+_\d+)\/\d+(\/)/, '$1/1920$2').replace(/\?.*$/, '')
@@ -202,7 +202,9 @@ async function main() {
     country_cn: countryCn,
     source_url: TARGET_URL,
     tagline: description.split('\n')[0] || '',
+    tagline_cn: '',
     description,
+    description_cn: '',
     features: JSON.stringify(uniqueFeatures),
     venue_types: JSON.stringify(venueTypes.length > 0 ? venueTypes.map(t => ({ name: t, name_en: t })) : [{ name: '庄园', name_en: 'Manor & Château' }]),
     towns: JSON.stringify(location ? [{ name: location.split(',')[0]?.trim() || 'Provence', name_cn: '普罗旺斯' }] : [{ name: 'Monteux', name_cn: '蒙图' }]),
@@ -237,7 +239,9 @@ async function main() {
       country_cn VARCHAR(100) DEFAULT '' COMMENT '国家中文名',
       source_url VARCHAR(500) DEFAULT '' COMMENT '爬取来源URL',
       tagline VARCHAR(500) DEFAULT '' COMMENT '副标题/宣传语',
+      tagline_cn VARCHAR(500) DEFAULT '' COMMENT '中文宣传语',
       description TEXT COMMENT '完整描述',
+      description_cn TEXT COMMENT '中文描述',
       features JSON COMMENT '特色亮点',
       venue_types JSON COMMENT '场地类型',
       towns JSON COMMENT '位置/城镇',
@@ -262,13 +266,14 @@ async function main() {
     console.log(`⚠️ 场地 ${venueData.slug} 已存在，将更新数据...`)
     await pool.execute(
       `UPDATE crawled_venues SET 
-        name=?, name_cn=?, country=?, country_cn=?, source_url=?, tagline=?,
-        description=?, features=?, venue_types=?, towns=?, images=?,
+        name=?, name_cn=?, country=?, country_cn=?, source_url=?, tagline=?, tagline_cn=?,
+        description=?, description_cn=?, features=?, venue_types=?, towns=?, images=?,
         budget_ranges=?, guest_capacities=?, faq=?, cover_image=?,
         rating=?, review_count=?, location=?
        WHERE slug=?`,
       [venueData.name, venueData.name_cn, venueData.country, venueData.country_cn,
-       venueData.source_url, venueData.tagline, venueData.description,
+       venueData.source_url, venueData.tagline, venueData.tagline_cn,
+       venueData.description, venueData.description_cn,
        venueData.features, venueData.venue_types, venueData.towns, venueData.images,
        venueData.budget_ranges, venueData.guest_capacities, venueData.faq,
        venueData.cover_image, venueData.rating, venueData.review_count,
@@ -277,12 +282,12 @@ async function main() {
   } else {
     await pool.execute(
       `INSERT INTO crawled_venues 
-        (slug, name, name_cn, country, country_cn, source_url, tagline, description,
+        (slug, name, name_cn, country, country_cn, source_url, tagline, tagline_cn, description, description_cn,
          features, venue_types, towns, images, budget_ranges, guest_capacities,
          faq, cover_image, rating, review_count, location, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [venueData.slug, venueData.name, venueData.name_cn, venueData.country, venueData.country_cn,
-       venueData.source_url, venueData.tagline, venueData.description,
+       venueData.source_url, venueData.tagline, venueData.tagline_cn, venueData.description, venueData.description_cn,
        venueData.features, venueData.venue_types, venueData.towns, venueData.images,
        venueData.budget_ranges, venueData.guest_capacities, venueData.faq,
        venueData.cover_image, venueData.rating, venueData.review_count,

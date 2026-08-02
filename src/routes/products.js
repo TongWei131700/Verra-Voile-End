@@ -88,8 +88,8 @@ router.get('/destination', async (req, res) => {
 router.get('/crawled-destinations', async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT id, slug, name, name_cn, country, country_cn, source_url, tagline,
-              LEFT(description, 200) AS description_preview,
+      `SELECT id, slug, name, name_cn, country, country_cn, source_url, tagline, tagline_cn,
+              LEFT(COALESCE(description_cn, description), 200) AS description_preview, description_cn,
               cover_image, features, venue_types, towns, budget_ranges, guest_capacities,
               sort_order, created_at
        FROM crawled_destinations
@@ -118,6 +118,26 @@ router.get('/crawled-destinations/:slug', async (req, res) => {
     res.json({ success: true, data: rows[0] })
   } catch (error) {
     console.error('获取爬取目的地详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-venues/:slug
+ * 获取单个爬取场地详情（crawled_venues 表）
+ */
+router.get('/crawled-venues/:slug', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM crawled_venues WHERE slug = ?`,
+      [req.params.slug]
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '场地不存在' })
+    }
+    res.json({ success: true, data: rows[0] })
+  } catch (error) {
+    console.error('获取爬取场地详情失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })
