@@ -15,6 +15,7 @@ const chatNotifyRouter = require('./routes/chat')
 const productsRouter = require('./routes/products')
 const versionRouter = require('./routes/version')
 const crawlRouter = require('./routes/crawl')
+const dataVersionRouter = require('./routes/dataVersion')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -36,6 +37,7 @@ app.use('/api/chat', chatNotifyRouter)
 app.use('/api/products', productsRouter)
 app.use('/api/version', versionRouter)
 app.use('/api/crawl', crawlRouter)
+app.use('/api/data-version', dataVersionRouter)
 
 // 健康检查
 app.get('/health', (req, res) => {
