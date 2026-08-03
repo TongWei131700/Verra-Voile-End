@@ -427,12 +427,17 @@ async function crawlUKVenues(limit = 4) {
           .substring(0, 80)
         venueData.slug = slug
 
-        const [existing] = await pool.execute('SELECT id FROM crawled_venues WHERE slug = ?', [slug])
+        // 安全约束：仅检查同一国家下的 slug，不影响其他国家数据
+        const [existing] = await pool.execute(
+          'SELECT id, country_cn FROM crawled_venues WHERE slug = ? AND country_cn = ?',
+          [slug, COUNTRY_CN]
+        )
         if (existing.length > 0) {
           results.push({ name: venueData.name, slug, status: '已存在' })
           continue
         }
 
+        // 只增不覆盖：INSERT 仅写入当前国家的数据，绝不 UPDATE/DELETE 其他记录
         await pool.execute(
           `INSERT INTO crawled_venues 
            (slug, name, name_cn, country, country_cn, source_url, tagline, description,
