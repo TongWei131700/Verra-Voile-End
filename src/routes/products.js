@@ -95,7 +95,25 @@ router.get('/crawled-destinations', async (req, res) => {
        FROM crawled_destinations
        ORDER BY sort_order ASC`
     )
-    res.json({ success: true, data: rows })
+
+    // 合并 crawled_venues 表数据（如“测试英国”）
+    const [venueRows] = await pool.execute(
+      `SELECT id, slug, name, name_cn, country, country_cn, source_url, tagline,
+              LEFT(description, 200) AS description_preview,
+              cover_image, features, venue_types, towns, budget_ranges, guest_capacities,
+              sort_order, created_at
+       FROM crawled_venues
+       ORDER BY sort_order ASC`
+    )
+
+    // 格式化 venueRows 使其与 crawled_destinations 字段对齐
+    const venueData = venueRows.map(v => ({
+      ...v,
+      tagline_cn: '',
+      description_cn: null,
+    }))
+
+    res.json({ success: true, data: [...rows, ...venueData] })
   } catch (error) {
     console.error('获取爬取目的地列表失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
@@ -118,6 +136,28 @@ router.get('/crawled-destinations/:slug', async (req, res) => {
     res.json({ success: true, data: rows[0] })
   } catch (error) {
     console.error('获取爬取目的地详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-venues
+ * 获取爬取场地列表（crawled_venues 表），可选 country_cn 筛选
+ */
+router.get('/crawled-venues', async (req, res) => {
+  try {
+    const { country_cn } = req.query
+    let sql = 'SELECT * FROM crawled_venues'
+    const params = []
+    if (country_cn) {
+      sql += ' WHERE country_cn = ?'
+      params.push(country_cn)
+    }
+    sql += ' ORDER BY sort_order ASC, id ASC'
+    const [rows] = await pool.execute(sql, params)
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('获取爬取场地列表失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })

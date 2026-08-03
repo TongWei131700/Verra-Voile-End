@@ -1,0 +1,46 @@
+#!/usr/bin/env expect -f
+set timeout 120
+
+# 上传压缩包
+spawn scp -o StrictHostKeyChecking=no /tmp/verra-voile-end.tar.gz root@47.99.138.250:/tmp/
+expect {
+    "password:" {
+        send "TongWei131700\r"
+        exp_continue
+    }
+    eof
+}
+puts "UPLOAD_DONE"
+
+# 解压并安装依赖
+spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "cd /var/www/verra-voile-end && rm -rf src package.json package-lock.json && tar -xzf /tmp/verra-voile-end.tar.gz && npm install --production 2>&1 | tail -5 && echo DEPLOY_OK"
+expect {
+    "password:" {
+        send "TongWei131700\r"
+        exp_continue
+    }
+    eof
+}
+puts "EXTRACT_DONE"
+
+# 停止服务释放端口
+spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "pm2 stop verra-voile-api 2>/dev/null; sleep 1; fuser -k 3000/tcp 2>/dev/null; sleep 2 && echo PORT_CLEARED"
+expect {
+    "password:" {
+        send "TongWei131700\r"
+        exp_continue
+    }
+    eof
+}
+puts "PORT_CLEARED"
+
+# 启动服务
+spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "cd /var/www/verra-voile-end && pm2 start src/index.js --name verra-voile-api && sleep 3 && curl -s http://localhost:3000/health && echo START_OK"
+expect {
+    "password:" {
+        send "TongWei131700\r"
+        exp_continue
+    }
+    eof
+}
+puts "ALL_DONE"

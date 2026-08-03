@@ -1,5 +1,5 @@
 const express = require('express')
-const { crawlGreeceDestinations, getCrawlState } = require('./crawler')
+const { crawlGreeceDestinations, crawlUKVenues, getCrawlState } = require('./crawler')
 
 const router = express.Router()
 
@@ -12,8 +12,12 @@ router.post('/start', async (req, res) => {
   try {
     const { country = 'greece', limit = 5 } = req.body
 
-    if (country.toLowerCase() !== 'greece') {
-      return res.status(400).json({ success: false, message: '目前仅支持希腊爬取' })
+    const supportedCountries = { greece: '希腊', uk: '英国' }
+    const countryKey = country.toLowerCase()
+    const countryLabel = supportedCountries[countryKey]
+
+    if (!countryLabel) {
+      return res.status(400).json({ success: false, message: `不支持的国家: ${country}，目前支持: ${Object.keys(supportedCountries).join(', ')}` })
     }
 
     const state = getCrawlState()
@@ -24,12 +28,13 @@ router.post('/start', async (req, res) => {
     // 异步执行爬取，立即返回
     res.json({
       success: true,
-      message: '爬取任务已启动，完成后将通过邮件通知',
-      country: '希腊'
+      message: `爬取任务已启动，完成后将通过邮件通知`,
+      country: countryLabel
     })
 
     // 后台执行爬取
-    crawlGreeceDestinations(limit).catch(err => {
+    const crawlFn = countryKey === 'uk' ? crawlUKVenues : crawlGreeceDestinations
+    crawlFn(limit).catch(err => {
       console.error('爬取任务失败:', err.message)
     })
   } catch (err) {
