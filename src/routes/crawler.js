@@ -2,6 +2,15 @@ const cheerio = require('cheerio')
 const { pool } = require('../db')
 const { sendCrawlStart, sendCrawlResult, sendCrawlProgress } = require('./mailer')
 
+// puppeteer-core（服务器端使用）
+let puppeteer = null
+try {
+  puppeteer = require('puppeteer-core')
+} catch (e) {
+  console.log('puppeteer-core 未安装，将使用 fetch 模式')
+}
+const CHROME_PATH = '/usr/bin/chromium-browser'
+
 // 爬取状态
 let crawlState = {
   running: false,
@@ -301,7 +310,7 @@ function getCrawlState() {
   }
 }
 
-// 英国场地爬取
+// 英国场地爬取（使用 puppeteer-core）
 async function crawlUKVenues(limit = 4) {
   const COUNTRY = 'United Kingdom'
   const COUNTRY_CN = '测试英国'
@@ -312,61 +321,65 @@ async function crawlUKVenues(limit = 4) {
     running: true,
     country: COUNTRY_CN,
     startTime: Date.now(),
-    progress: '正在连接 WeddingWire...',
+    progress: '正在启动浏览器...',
     results: [],
     error: null
   }
 
   await sendCrawlStart(COUNTRY_CN)
 
+  if (!puppeteer) {
+    crawlState.running = false
+    crawlState.error = 'puppeteer-core 未安装'
+    await sendCrawlResult(COUNTRY_CN, [], 'puppeteer-core 未安装')
+    return { success: false, error: 'puppeteer-core 未安装' }
+  }
+
+  let browser = null
   try {
-    // 1. 请求搜索页，提取场地详情 URL
+    // 启动浏览器
+    browser = await puppeteer.launch({
+      executablePath: CHROME_PATH,
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    })
+    const page = await browser.newPage()
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+
+    // 1. 访问搜索页提取场地 URL
     crawlState.progress = '正在请求搜索页...'
-    let html = ''
     try {
-      const response = await fetch(SEARCH_URL, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9'
-        }
-      })
-      if (response.ok) html = await response.text()
+      await page.goto(SEARCH_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
+      await new Promise(r => setTimeout(r, 3000))
     } catch (e) {
-      console.log('搜索页请求失败:', e.message)
+      console.log('搜索页加载超时，继续...')
     }
 
-    // 2. 提取场地详情 URL
+    // 提取场地详情 URL
     crawlState.progress = '正在解析搜索结果...'
-    const venueUrls = []
-    const urlSet = new Set()
-
-    if (html) {
-      const $ = cheerio.load(html)
-      // 从链接中提取场地详情页
-      $('a[href]').each((_, el) => {
-        const href = $(el).attr('href') || ''
-        if (href.includes('/destination-wedding/destination/') && !urlSet.has(href)) {
-          urlSet.add(href)
-          venueUrls.push(href.startsWith('http') ? href : `https://www.weddingwire.com${href}`)
+    const venueUrls = await page.evaluate(() => {
+      const urls = []
+      const seen = new Set()
+      // 从链接提取
+      document.querySelectorAll('a[href]').forEach(el => {
+        const href = el.getAttribute('href') || ''
+        if (href.includes('/destination-wedding/') && href.includes('--e') && !seen.has(href)) {
+          seen.add(href)
+          urls.push(href.startsWith('http') ? href : `https://www.weddingwire.com${href}`)
         }
       })
-      // 从 JSON script 中提取
-      if (venueUrls.length === 0) {
-        $('script[type="application/json"], script[type="application/ld+json"]').each((_, el) => {
-          try {
-            const json = JSON.parse($(el).html())
-            const str = JSON.stringify(json)
-            const matches = str.match(/https?:\/\/(www\.)?weddingwire\.com\/destination-wedding\/destination\/[^"\\]+/gi)
-            if (matches) {
-              matches.forEach(url => {
-                if (!urlSet.has(url)) { urlSet.add(url); venueUrls.push(url) }
-              })
-            }
-          } catch (e) { /* ignore */ }
-        })
-      }
-    }
+      // 从 JSON-LD 提取
+      document.querySelectorAll('script[type="application/ld+json"]').forEach(el => {
+        try {
+          const str = el.textContent
+          const matches = str.match(/https?:\/\/(www\.)?weddingwire\.com\/destination-wedding\/destination\/[^"\\]+/gi)
+          if (matches) matches.forEach(url => {
+            if (!seen.has(url)) { seen.add(url); urls.push(url) }
+          })
+        } catch {}
+      })
+      return urls
+    })
 
     // 后备：已知英国场地
     if (venueUrls.length === 0) {
@@ -385,24 +398,28 @@ async function crawlUKVenues(limit = 4) {
     const finalUrls = venueUrls.slice(0, limit)
     crawlState.progress = `找到 ${finalUrls.length} 个场地，开始爬取详情...`
 
-    // 3. 逐个爬取场地详情
+    // 先访问 WeddingWire 首页建立会话
+    try {
+      await page.goto('https://www.weddingwire.com/', { waitUntil: 'domcontentloaded', timeout: 15000 })
+    } catch (e) { /* ignore */ }
+
+    // 2. 逐个爬取场地详情
     const results = []
     for (let i = 0; i < finalUrls.length; i++) {
       const url = finalUrls[i]
-      crawlState.progress = `正在爬取 ${i + 1}/${finalUrls.length}: ${url.split('/').pop().split('--')[0]}`
+      const venueName = url.split('/').pop().split('--')[0].replace(/-/g, ' ')
+      crawlState.progress = `正在爬取 ${i + 1}/${finalUrls.length}: ${venueName}`
 
       try {
-        const venueData = await crawlVenueDetail(url)
+        const venueData = await crawlVenueDetailPuppeteer(page, url, MAX_IMAGES)
         if (!venueData) {
           results.push({ url, status: '爬取失败' })
           continue
         }
 
-        // 设置国家信息
         venueData.country = COUNTRY
         venueData.country_cn = COUNTRY_CN
 
-        // 生成 slug
         const slug = venueData.name.toLowerCase()
           .replace(/[^a-z0-9\s-]/g, '')
           .replace(/\s+/g, '-')
@@ -410,7 +427,6 @@ async function crawlUKVenues(limit = 4) {
           .substring(0, 80)
         venueData.slug = slug
 
-        // 入库
         const [existing] = await pool.execute('SELECT id FROM crawled_venues WHERE slug = ?', [slug])
         if (existing.length > 0) {
           results.push({ name: venueData.name, slug, status: '已存在' })
@@ -437,6 +453,9 @@ async function crawlUKVenues(limit = 4) {
         console.error(`爬取失败: ${url}`, err.message)
         results.push({ url, status: `失败: ${err.message}` })
       }
+
+      // 随机延时
+      await new Promise(r => setTimeout(r, 1500 + Math.random() * 1000))
     }
 
     crawlState.results = results
@@ -450,10 +469,186 @@ async function crawlUKVenues(limit = 4) {
     crawlState.progress = `失败: ${err.message}`
     await sendCrawlResult(COUNTRY_CN, [], err.message)
     throw err
+  } finally {
+    if (browser) await browser.close()
   }
 }
 
-// 爬取单个场地详情页
+// 使用 puppeteer page 爬取单个场地详情
+async function crawlVenueDetailPuppeteer(page, url, MAX_IMAGES = 24) {
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await new Promise(r => setTimeout(r, 2000))
+
+    // 点击 Read more 展开描述
+    try {
+      const btns = await page.$$('.storefrontDescription__link')
+      for (const btn of btns) { try { await btn.click() } catch {} }
+      await new Promise(r => setTimeout(r, 500))
+    } catch {}
+
+    // 提取所有数据
+    const data = await page.evaluate((maxImgs) => {
+      // JSON-LD
+      const scripts = document.querySelectorAll('script[type="application/ld+json"]')
+      let ldData = null
+      scripts.forEach(s => {
+        try {
+          const json = JSON.parse(s.textContent)
+          if (json['@type'] === 'LocalBusiness' || json['@type'] === 'WeddingVenue') ldData = json
+          if (json['@graph']) {
+            for (const sub of json['@graph']) {
+              if (sub['@type'] === 'LocalBusiness' || sub['@type'] === 'WeddingVenue') ldData = sub
+            }
+          }
+        } catch {}
+      })
+
+      // 名称
+      const name = (document.querySelector('h1') || document.querySelector('title'))
+        ?.textContent?.trim()?.split(' - ')[0] || ''
+      if (!name) return null
+
+      // 描述
+      let description = ''
+      const descEl = document.querySelector('.storefrontDescription__content')
+      if (descEl) {
+        const ps = descEl.querySelectorAll('p')
+        if (ps.length > 0) {
+          description = Array.from(ps).map(p => p.textContent.trim()).filter(t => t).join('\n\n')
+        } else {
+          description = descEl.textContent.trim()
+        }
+      }
+      if (!description && ldData?.description) description = ldData.description
+
+      // 图片
+      const imageSet = new Set()
+      if (ldData?.image) {
+        const imgList = Array.isArray(ldData.image) ? ldData.image : [ldData.image]
+        for (const img of imgList) {
+          const imgUrl = typeof img === 'string' ? img : (img.contentUrl || img.url || '')
+          if (imgUrl) {
+            const hd = imgUrl.replace(/(\/vendor\/\d+\/\d+_\d+)\/\d+(\/)/, '$1/1920$2').replace(/\?.*$/, '')
+            imageSet.add(hd)
+          }
+        }
+      }
+      if (imageSet.size === 0) {
+        document.querySelectorAll('img').forEach(img => {
+          const src = img.src || img.getAttribute('data-src') || ''
+          if (src && (src.includes('cdn0.hitched.co.uk/vendor/') || src.includes('cdn0.weddingwire.com/vendor/'))) {
+            const hd = src.replace(/(\/vendor\/\d+\/\d+_\d+)\/\d+(\/)/, '$1/1920$2').replace(/\?.*$/, '')
+            imageSet.add(hd)
+          }
+        })
+      }
+      const images = [...imageSet].slice(0, maxImgs)
+
+      // 评分
+      let rating = '', reviewCount = '0'
+      if (ldData?.aggregateRating) {
+        rating = String(ldData.aggregateRating.ratingValue || '')
+        reviewCount = String(ldData.aggregateRating.reviewCount || '0')
+      }
+      if (!rating) {
+        const m = document.body.textContent.match(/(\d+\.?\d*)\s+out of 5/)
+        if (m) rating = m[1]
+      }
+
+      // 位置
+      let location = ''
+      const locEl = document.querySelector('.storefrontHeadingLocation__label a')
+      if (locEl) location = locEl.textContent.trim()
+      if (!location && ldData?.address) {
+        const addr = ldData.address
+        location = [addr.streetAddress, addr.addressLocality, addr.addressRegion].filter(Boolean).join(', ')
+      }
+
+      // 场地类型（面包屑）
+      let venueType = ''
+      const breadcrumb = document.querySelector('nav[aria-label="Breadcrumb"]')
+      if (breadcrumb) {
+        const m = breadcrumb.textContent.match(/(\w+)\s*Weddings?/i)
+        if (m) venueType = m[1]
+      }
+
+      return { name, description, images, rating, reviewCount, location, venueType, ldData: !!ldData }
+    }, MAX_IMAGES)
+
+    if (!data || !data.name) return null
+
+    // 构建 venue_types
+    const typeMap = {
+      'Mansion': { name: '庄园', name_en: 'Mansion' },
+      'Garden': { name: '花园', name_en: 'Garden' },
+      'Hotel': { name: '酒店', name_en: 'Hotel' },
+      'Restaurant': { name: '餐厅', name_en: 'Restaurant' },
+      'Barn': { name: '谷仓', name_en: 'Barn' },
+      'Banquet': { name: '宴会厅', name_en: 'Banquet Hall' },
+      'Country': { name: '乡村', name_en: 'Country House' },
+      'Historic': { name: '历史建筑', name_en: 'Historic Building' },
+      'Manor': { name: '庄园', name_en: 'Manor House' },
+    }
+    let venueTypes = []
+    if (data.venueType && typeMap[data.venueType]) {
+      venueTypes.push(typeMap[data.venueType])
+    }
+    if (venueTypes.length === 0) {
+      const nameLower = data.name.toLowerCase()
+      if (nameLower.includes('hall') || nameLower.includes('manor') || nameLower.includes('court')) {
+        venueTypes.push({ name: '庄园', name_en: 'Manor House' })
+      } else if (nameLower.includes('hotel')) {
+        venueTypes.push({ name: '酒店', name_en: 'Hotel' })
+      } else {
+        venueTypes.push({ name: '婚礼场地', name_en: 'Wedding Venue' })
+      }
+    }
+
+    // 构建 towns
+    const towns = []
+    if (data.location) {
+      towns.push({ name: data.location, name_cn: data.location })
+    }
+    if (towns.length === 0) towns.push({ name: 'United Kingdom', name_cn: '英国' })
+
+    // 构建 features
+    let features = []
+    if (data.description) {
+      const sentences = data.description.split(/[。\.\n]/).map(s => s.trim()).filter(s => s.length > 10)
+      features = sentences.slice(0, 6).map(s => s.slice(0, 100))
+    }
+    if (data.rating && data.reviewCount !== '0') {
+      features.push(`WeddingWire ${data.rating}分（${data.reviewCount}条评价）`)
+    }
+    if (features.length === 0) features = ['UK selected wedding venue', 'Professional wedding service team']
+
+    const tagline = data.description ? data.description.split(/[。\.\n]/)[0].trim().slice(0, 80) : `${data.name} - UK Wedding Venue`
+
+    return {
+      name: data.name,
+      tagline,
+      description: data.description || `${data.name} is a selected wedding venue in the United Kingdom.`,
+      features: JSON.stringify(features),
+      venue_types: JSON.stringify(venueTypes),
+      towns: JSON.stringify(towns),
+      images: JSON.stringify(data.images),
+      imageCount: data.images.length,
+      budget_ranges: JSON.stringify([]),
+      guest_capacities: JSON.stringify([]),
+      faq: JSON.stringify([]),
+      cover_image: data.images[0] || '',
+      rating: data.rating,
+      review_count: data.reviewCount,
+      location: data.location
+    }
+  } catch (err) {
+    console.error('puppeteer爬取失败:', url, err.message)
+    return null
+  }
+}
+
+// 保留旧的 fetch 版本作为后备（希腊目的地使用）
 async function crawlVenueDetail(url) {
   const MAX_IMAGES = 24
   const resp = await fetch(url, {

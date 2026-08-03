@@ -138,6 +138,9 @@ async function initDB() {
   await ensureCrawledDestinationsTable(pool)
   await seedCrawledDestinations(pool)
 
+  // 婚礼团队表
+  await ensureWeddingTeamsTable(pool)
+
   // 目的地场地表（含城市分组字段）
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
@@ -1100,4 +1103,28 @@ async function insertNewCrawledDestinations(pool) {
   }
 }
 
-module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable }
+/**
+ * 创建婚礼团队表
+ */
+async function ensureWeddingTeamsTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS wedding_teams (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL COMMENT '服务名称',
+      name_en VARCHAR(200) DEFAULT '' COMMENT '英文名',
+      role VARCHAR(100) DEFAULT '' COMMENT '角色/职能（如摄影师、化妆师）',
+      role_en VARCHAR(100) DEFAULT '' COMMENT '角色英文名',
+      description TEXT COMMENT '服务描述',
+      image VARCHAR(500) DEFAULT '' COMMENT '图片URL',
+      price INT NOT NULL DEFAULT 0 COMMENT '价格',
+      unit VARCHAR(10) DEFAULT '€' COMMENT '货币单位',
+      highlight VARCHAR(50) DEFAULT '' COMMENT '标签（热门/推荐等）',
+      sort_order INT DEFAULT 0 COMMENT '排序权重',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_name (name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='婚礼团队服务表'
+  `)
+  console.log('✓ 表 wedding_teams 已就绪')
+}
+
+module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable }

@@ -1,5 +1,5 @@
 const express = require('express')
-const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable } = require('../db')
+const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable } = require('../db')
 
 const router = express.Router()
 
@@ -77,6 +77,23 @@ router.get('/destination', async (req, res) => {
     res.json({ success: true, data: { cities } })
   } catch (error) {
     console.error('获取目的地场地失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/wedding-teams
+ * 获取婚礼团队服务列表
+ */
+router.get('/wedding-teams', async (req, res) => {
+  try {
+    await ensureWeddingTeamsTable(pool)
+    const [rows] = await pool.execute(
+      'SELECT * FROM wedding_teams ORDER BY sort_order ASC'
+    )
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('获取婚礼团队列表失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })
