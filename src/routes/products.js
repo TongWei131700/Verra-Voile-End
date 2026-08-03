@@ -130,12 +130,12 @@ router.get('/crawled-destinations', async (req, res) => {
       description_cn: null,
     }))
 
-    // 合并去重（以 slug 为键，crawled_destinations 优先）
+    // 合并去重（以 slug 为键，crawled_venues 优先，因为它是最新爬取数据）
     const merged = new Map()
-    for (const item of rows) {
+    for (const item of venueData) {
       merged.set(item.slug, item)
     }
-    for (const item of venueData) {
+    for (const item of rows) {
       if (!merged.has(item.slug)) {
         merged.set(item.slug, item)
       }
