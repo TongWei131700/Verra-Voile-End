@@ -130,7 +130,18 @@ router.get('/crawled-destinations', async (req, res) => {
       description_cn: null,
     }))
 
-    res.json({ success: true, data: [...rows, ...venueData] })
+    // 合并去重（以 slug 为键，crawled_destinations 优先）
+    const merged = new Map()
+    for (const item of rows) {
+      merged.set(item.slug, item)
+    }
+    for (const item of venueData) {
+      if (!merged.has(item.slug)) {
+        merged.set(item.slug, item)
+      }
+    }
+
+    res.json({ success: true, data: [...merged.values()] })
   } catch (error) {
     console.error('获取爬取目的地列表失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
