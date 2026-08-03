@@ -1,5 +1,5 @@
 const express = require('express')
-const { crawlGreeceDestinations, crawlUKVenues, getCrawlState } = require('./crawler')
+const { crawlGreeceDestinations, crawlUKVenues, crawlFranceVenues, getCrawlState } = require('./crawler')
 
 const router = express.Router()
 
@@ -12,7 +12,7 @@ router.post('/start', async (req, res) => {
   try {
     const { country = 'greece', limit = 5 } = req.body
 
-    const supportedCountries = { greece: '希腊', uk: '英国' }
+    const supportedCountries = { greece: '希腊', uk: '英国', france: '法国' }
     const countryKey = country.toLowerCase()
     const countryLabel = supportedCountries[countryKey]
 
@@ -33,7 +33,8 @@ router.post('/start', async (req, res) => {
     })
 
     // 后台执行爬取
-    const crawlFn = countryKey === 'uk' ? crawlUKVenues : crawlGreeceDestinations
+    const crawlMap = { uk: crawlUKVenues, france: crawlFranceVenues }
+    const crawlFn = crawlMap[countryKey] || crawlGreeceDestinations
     crawlFn(limit).catch(err => {
       console.error('爬取任务失败:', err.message)
     })

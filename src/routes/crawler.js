@@ -772,4 +772,162 @@ async function crawlVenueDetail(url) {
   }
 }
 
-module.exports = { crawlGreeceDestinations, crawlUKVenues, getCrawlState }
+// 法国场地爬取（使用 puppeteer-core）
+async function crawlFranceVenues(limit = 57) {
+  const COUNTRY = 'Test France'
+  const COUNTRY_CN = '测试法国'
+  const SEARCH_URL = 'https://www.weddingwire.com/shared/search?destCountry=3'
+  const MAX_IMAGES = 24
+
+  crawlState = {
+    running: true,
+    country: COUNTRY_CN,
+    startTime: Date.now(),
+    progress: '正在启动浏览器...',
+    results: [],
+    error: null
+  }
+
+  await sendCrawlStart(COUNTRY_CN)
+
+  if (!puppeteer) {
+    crawlState.running = false
+    crawlState.error = 'puppeteer-core 未安装'
+    await sendCrawlResult(COUNTRY_CN, [], 'puppeteer-core 未安装')
+    return { success: false, error: 'puppeteer-core 未安装' }
+  }
+
+  let browser = null
+  try {
+    browser = await puppeteer.launch({
+      executablePath: CHROME_PATH,
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    })
+    const page = await browser.newPage()
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+
+    // 1. 访问搜索页提取场地 URL
+    crawlState.progress = '正在请求法国搜索页...'
+    try {
+      await page.goto(SEARCH_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
+      await new Promise(r => setTimeout(r, 3000))
+    } catch (e) {
+      console.log('搜索页加载超时，继续...')
+    }
+
+    // 提取场地详情 URL
+    crawlState.progress = '正在解析搜索结果...'
+    const venueUrls = await page.evaluate(() => {
+      const urls = []
+      const seen = new Set()
+      document.querySelectorAll('a[href]').forEach(el => {
+        const href = el.getAttribute('href') || ''
+        if (href.includes('/destination-wedding/') && href.includes('--e') && !seen.has(href)) {
+          seen.add(href)
+          urls.push(href.startsWith('http') ? href : `https://www.weddingwire.com${href}`)
+        }
+      })
+      document.querySelectorAll('script[type="application/ld+json"]').forEach(el => {
+        try {
+          const str = el.textContent
+          const matches = str.match(/https?:\/\/(www\.)?weddingwire\.com\/destination-wedding\/destination\/[^"\\]+/gi)
+          if (matches) matches.forEach(url => {
+            if (!seen.has(url)) { seen.add(url); urls.push(url) }
+          })
+        } catch {}
+      })
+      return urls
+    })
+
+    if (venueUrls.length === 0) {
+      crawlState.progress = '搜索页无结果，任务结束'
+      crawlState.running = false
+      await sendCrawlResult(COUNTRY_CN, [], '搜索页无结果')
+      return { success: false, error: '搜索页无结果' }
+    }
+
+    const finalUrls = venueUrls.slice(0, limit)
+    crawlState.progress = `找到 ${finalUrls.length} 个场地，开始爬取详情...`
+
+    // 先访问 WeddingWire 首页建立会话
+    try {
+      await page.goto('https://www.weddingwire.com/', { waitUntil: 'domcontentloaded', timeout: 15000 })
+    } catch (e) { /* ignore */ }
+
+    // 2. 逐个爬取场地详情
+    const results = []
+    for (let i = 0; i < finalUrls.length; i++) {
+      const url = finalUrls[i]
+      const venueName = url.split('/').pop().split('--')[0].replace(/-/g, ' ')
+      crawlState.progress = `正在爬取 ${i + 1}/${finalUrls.length}: ${venueName}`
+
+      try {
+        const venueData = await crawlVenueDetailPuppeteer(page, url, MAX_IMAGES)
+        if (!venueData) {
+          results.push({ url, status: '爬取失败' })
+          continue
+        }
+
+        venueData.country = COUNTRY
+        venueData.country_cn = COUNTRY_CN
+
+        const slug = venueData.name.toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .substring(0, 80)
+        venueData.slug = slug
+
+        // 安全约束：仅检查同一国家下的 slug
+        const [existing] = await pool.execute(
+          'SELECT id, country_cn FROM crawled_venues WHERE slug = ? AND country_cn = ?',
+          [slug, COUNTRY_CN]
+        )
+        if (existing.length > 0) {
+          results.push({ name: venueData.name, slug, status: '已存在' })
+          continue
+        }
+
+        // 只增不覆盖
+        await pool.execute(
+          `INSERT INTO crawled_venues 
+           (slug, name, name_cn, country, country_cn, source_url, tagline, description,
+            features, venue_types, towns, images, budget_ranges, guest_capacities,
+            faq, cover_image, rating, review_count, location, sort_order)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [slug, venueData.name, '', COUNTRY, COUNTRY_CN, url, venueData.tagline || '',
+           venueData.description || '', venueData.features || '[]',
+           venueData.venue_types || '[{"name":"Venue","name_en":"Venue"}]',
+           venueData.towns || '[]', venueData.images || '[]',
+           venueData.budget_ranges || '[]', venueData.guest_capacities || '[]',
+           venueData.faq || '[]', venueData.cover_image || '',
+           venueData.rating || '', venueData.review_count || '0',
+           venueData.location || '', 200 + i]
+        )
+        results.push({ name: venueData.name, slug, images: venueData.imageCount || 0, status: '已入库' })
+      } catch (err) {
+        console.error(`爬取失败: ${url}`, err.message)
+        results.push({ url, status: `失败: ${err.message}` })
+      }
+
+      await new Promise(r => setTimeout(r, 1500 + Math.random() * 1000))
+    }
+
+    crawlState.results = results
+    crawlState.running = false
+    crawlState.progress = '完成'
+    await sendCrawlResult(COUNTRY_CN, results)
+    return { success: true, results }
+  } catch (err) {
+    crawlState.running = false
+    crawlState.error = err.message
+    crawlState.progress = `失败: ${err.message}`
+    await sendCrawlResult(COUNTRY_CN, [], err.message)
+    throw err
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
+module.exports = { crawlGreeceDestinations, crawlUKVenues, crawlFranceVenues, getCrawlState }
