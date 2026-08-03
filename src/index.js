@@ -20,6 +20,9 @@ const dataVersionRouter = require('./routes/dataVersion')
 const app = express()
 const PORT = process.env.PORT || 3000
 
+// 禁用 ETag 缓存，避免 304
+app.set('etag', false)
+
 // 中间件
 app.use(cors())
 app.use(express.json())
