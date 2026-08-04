@@ -4,6 +4,55 @@ const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ens
 const router = express.Router()
 
 /**
+ * 辅助：动态发现所有 cd_ / cv_ 国家分表
+ */
+async function getCountryTables(prefix) {
+  const [tables] = await pool.execute(`SHOW TABLES LIKE '${prefix}\\_%'`)
+  return tables.map(t => Object.values(t)[0])
+}
+
+/**
+ * 辅助：从所有 cd_ 表中 UNION 查询列表
+ */
+async function queryAllDestinations() {
+  const tables = await getCountryTables('cd')
+  if (tables.length === 0) return []
+  const selects = tables.map(t =>
+    `SELECT id, slug, name, name_cn, country, country_cn, source_url, tagline, tagline_cn,
+            LEFT(COALESCE(description_cn, description), 200) AS description_preview, description_cn,
+            cover_image, features, venue_types, towns, budget_ranges, guest_capacities,
+            sort_order, created_at
+     FROM \`${t}\``
+  )
+  const [rows] = await pool.execute(selects.join(' UNION ALL ') + ' ORDER BY sort_order ASC')
+  return rows
+}
+
+/**
+ * 辅助：从所有 cv_ 表中按 slug 查找场地
+ */
+async function findVenueBySlug(slug) {
+  const tables = await getCountryTables('cv')
+  for (const t of tables) {
+    const [rows] = await pool.execute(`SELECT * FROM \`${t}\` WHERE slug = ? LIMIT 1`, [slug])
+    if (rows.length > 0) return rows[0]
+  }
+  return null
+}
+
+/**
+ * 辅助：从所有 cd_ 表中按 slug 查找目的地
+ */
+async function findDestinationBySlug(slug) {
+  const tables = await getCountryTables('cd')
+  for (const t of tables) {
+    const [rows] = await pool.execute(`SELECT * FROM \`${t}\` WHERE slug = ? LIMIT 1`, [slug])
+    if (rows.length > 0) return rows[0]
+  }
+  return null
+}
+
+/**
  * GET /api/products
  * 获取所有商品种类概览（用于 Listing 页面卡片）
  * 返回格式: { categories: [{ id, name, nameEn, image, description }] }
@@ -100,48 +149,12 @@ router.get('/wedding-teams', async (req, res) => {
 
 /**
  * GET /api/products/crawled-destinations
- * 获取爬取目的地列表（试验表）
+ * 获取爬取目的地列表（从所有国家分表 UNION）
  */
 router.get('/crawled-destinations', async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT id, slug, name, name_cn, country, country_cn, source_url, tagline, tagline_cn,
-              LEFT(COALESCE(description_cn, description), 200) AS description_preview, description_cn,
-              cover_image, features, venue_types, towns, budget_ranges, guest_capacities,
-              sort_order, created_at
-       FROM crawled_destinations
-       ORDER BY sort_order ASC`
-    )
-
-    // 合并 crawled_venues 表数据（如“测试英国”）
-    const [venueRows] = await pool.execute(
-      `SELECT id, slug, name, name_cn, country, country_cn, source_url, tagline,
-              LEFT(description, 200) AS description_preview,
-              cover_image, features, venue_types, towns, budget_ranges, guest_capacities,
-              sort_order, created_at
-       FROM crawled_venues
-       ORDER BY sort_order ASC`
-    )
-
-    // 格式化 venueRows 使其与 crawled_destinations 字段对齐
-    const venueData = venueRows.map(v => ({
-      ...v,
-      tagline_cn: '',
-      description_cn: null,
-    }))
-
-    // 合并去重（以 slug 为键，crawled_venues 优先，因为它是最新爬取数据）
-    const merged = new Map()
-    for (const item of venueData) {
-      merged.set(item.slug, item)
-    }
-    for (const item of rows) {
-      if (!merged.has(item.slug)) {
-        merged.set(item.slug, item)
-      }
-    }
-
-    res.json({ success: true, data: [...merged.values()] })
+    const data = await queryAllDestinations()
+    res.json({ success: true, data })
   } catch (error) {
     console.error('获取爬取目的地列表失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
@@ -150,18 +163,15 @@ router.get('/crawled-destinations', async (req, res) => {
 
 /**
  * GET /api/products/crawled-destinations/:slug
- * 获取单个爬取目的地详情（试验表）
+ * 获取单个爬取目的地详情（从所有国家分表查找）
  */
 router.get('/crawled-destinations/:slug', async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT * FROM crawled_destinations WHERE slug = ?`,
-      [req.params.slug]
-    )
-    if (rows.length === 0) {
+    const data = await findDestinationBySlug(req.params.slug)
+    if (!data) {
       return res.status(404).json({ success: false, message: '目的地不存在' })
     }
-    res.json({ success: true, data: rows[0] })
+    res.json({ success: true, data })
   } catch (error) {
     console.error('获取爬取目的地详情失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
@@ -170,19 +180,25 @@ router.get('/crawled-destinations/:slug', async (req, res) => {
 
 /**
  * GET /api/products/crawled-venues
- * 获取爬取场地列表（crawled_venues 表），可选 country_cn 筛选
+ * 获取爬取场地列表（从所有国家分表），可选 country_cn 筛选
  */
 router.get('/crawled-venues', async (req, res) => {
   try {
     const { country_cn } = req.query
-    let sql = 'SELECT * FROM crawled_venues'
-    const params = []
-    if (country_cn) {
-      sql += ' WHERE country_cn = ?'
-      params.push(country_cn)
-    }
-    sql += ' ORDER BY sort_order ASC, id ASC'
-    const [rows] = await pool.execute(sql, params)
+    const tables = await getCountryTables('cv')
+    if (tables.length === 0) return res.json({ success: true, data: [] })
+
+    const selects = tables.map(t => {
+      if (country_cn) {
+        return `SELECT * FROM \`${t}\` WHERE country_cn = ?`
+      }
+      return `SELECT * FROM \`${t}\``
+    })
+    const params = country_cn ? tables.map(() => country_cn).flat() : []
+    const [rows] = await pool.execute(
+      selects.join(' UNION ALL ') + ' ORDER BY sort_order ASC, id ASC',
+      params
+    )
     res.json({ success: true, data: rows })
   } catch (error) {
     console.error('获取爬取场地列表失败:', error)
@@ -192,18 +208,15 @@ router.get('/crawled-venues', async (req, res) => {
 
 /**
  * GET /api/products/crawled-venues/:slug
- * 获取单个爬取场地详情（crawled_venues 表）
+ * 获取单个爬取场地详情（从所有国家分表查找）
  */
 router.get('/crawled-venues/:slug', async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT * FROM crawled_venues WHERE slug = ?`,
-      [req.params.slug]
-    )
-    if (rows.length === 0) {
+    const data = await findVenueBySlug(req.params.slug)
+    if (!data) {
       return res.status(404).json({ success: false, message: '场地不存在' })
     }
-    res.json({ success: true, data: rows[0] })
+    res.json({ success: true, data })
   } catch (error) {
     console.error('获取爬取场地详情失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
