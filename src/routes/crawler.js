@@ -807,48 +807,63 @@ async function crawlFranceVenues(limit = 57) {
     const page = await browser.newPage()
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
-    // 1. 访问搜索页提取场地 URL
-    crawlState.progress = '正在请求法国搜索页...'
-    try {
-      await page.goto(SEARCH_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
-      await new Promise(r => setTimeout(r, 3000))
-    } catch (e) {
-      console.log('搜索页加载超时，继续...')
-    }
-
-    // 提取场地详情 URL
-    crawlState.progress = '正在解析搜索结果...'
-    const venueUrls = await page.evaluate(() => {
-      const urls = []
-      const seen = new Set()
-      document.querySelectorAll('a[href]').forEach(el => {
-        const href = el.getAttribute('href') || ''
-        if (href.includes('/destination-wedding/') && href.includes('--e') && !seen.has(href)) {
-          seen.add(href)
-          urls.push(href.startsWith('http') ? href : `https://www.weddingwire.com${href}`)
-        }
-      })
-      document.querySelectorAll('script[type="application/ld+json"]').forEach(el => {
-        try {
-          const str = el.textContent
-          const matches = str.match(/https?:\/\/(www\.)?weddingwire\.com\/destination-wedding\/destination\/[^"\\]+/gi)
-          if (matches) matches.forEach(url => {
-            if (!seen.has(url)) { seen.add(url); urls.push(url) }
-          })
-        } catch {}
-      })
-      return urls
-    })
-
-    if (venueUrls.length === 0) {
-      crawlState.progress = '搜索页无结果，任务结束'
-      crawlState.running = false
-      await sendCrawlResult(COUNTRY_CN, [], '搜索页无结果')
-      return { success: false, error: '搜索页无结果' }
-    }
-
-    const finalUrls = venueUrls.slice(0, limit)
-    crawlState.progress = `找到 ${finalUrls.length} 个场地，开始爬取详情...`
+    // 全部51个法国场地URL（从3页搜索结果提取）
+    const allUrls = [
+      'https://www.weddingwire.com/destination-wedding/france/chateau-saint-laurent--e2207142',
+      'https://www.weddingwire.com/destination-wedding/france/white-house-cannes--e2209162',
+      'https://www.weddingwire.com/destination-wedding/france/les-jardins-darlias-by-la-villa-alexandra--e2218082',
+      'https://www.weddingwire.com/destination-wedding/france/fleurs-de-prestige--e2219288',
+      'https://www.weddingwire.com/destination-wedding/france/domaine-le-grand-belly--e2092325',
+      'https://www.weddingwire.com/destination-wedding/france/domaine-santa-maria--e2154721',
+      'https://www.weddingwire.com/destination-wedding/france/mas-de-la-massane--e2234596',
+      'https://www.weddingwire.com/destination-wedding/france/domaine-de-beauregard--e2229202',
+      'https://www.weddingwire.com/destination-wedding/france/domaine-terra-rosa--e2191838',
+      'https://www.weddingwire.com/destination-wedding/france/lmk-events--e2233234',
+      'https://www.weddingwire.com/destination-wedding/france/le-domaine-anse-marcel-beach--e2211738',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-des-briottieres--e2042507',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-scalibert--e2223360',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-la-pascalette--e2232310',
+      'https://www.weddingwire.com/destination-wedding/france/le-mas-des-cinq-fontaines--e2132875',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-seguin--e2099525',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-laurentie--e2213646',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-le-fresne--e2090847',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-la-tour-vaucros--e1950435',
+      'https://www.weddingwire.com/destination-wedding/france/le-petit-roulet--e2114615',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-courcelles-le-roy--e2008027',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-la-faye--e2233222',
+      'https://www.weddingwire.com/destination-wedding/france/domaine-du-grand-lauron--e2197854',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-serre-de-parc--e2217626',
+      'https://www.weddingwire.com/destination-wedding/france/le-mas-de-la-rose--e2096297',
+      'https://www.weddingwire.com/destination-wedding/france/domaine-la-plume--e2120425',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-le-chereau--e2234246',
+      'https://www.weddingwire.com/destination-wedding/france/couvent-notre-dame-des-pres--e2162793',
+      'https://www.weddingwire.com/destination-wedding/france/abbaye-de-talloires--e2121487',
+      'https://www.weddingwire.com/destination-wedding/france/la-faiseuse-de-reves--e2233224',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-comtesse-lafond--e2215968',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-la-jarthe--e2224724',
+      'https://www.weddingwire.com/destination-wedding/france/rocabella--e2216044',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-heloise--e2236838',
+      'https://www.weddingwire.com/destination-wedding/france/domaine-de-la-chartrogniere--e2136551',
+      'https://www.weddingwire.com/destination-wedding/france/domaine-d-aveny--e2152703',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-chaumontel--e2221826',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-thorens--e2108701',
+      'https://www.weddingwire.com/destination-wedding/france/la-dime-de-giverny--e1992655',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-la-bourlie--e2225000',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-tresserve--e2001745',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-la-noe-seche--e2233988',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-vergieres--e2211030',
+      'https://www.weddingwire.com/destination-wedding/france/les-domaines-de-patras--e2142416',
+      'https://www.weddingwire.com/destination-wedding/france/la-grange-de-javon--e2159329',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-saint-martin-du-tertre--e2200210',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-pimo--e2214730',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-sentout--e2216644',
+      'https://www.weddingwire.com/destination-wedding/france/la-tresoriere--e2191310',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-des-perrais--e2233910',
+      'https://www.weddingwire.com/destination-wedding/france/chateau-de-la-colaissiere--e1950453',
+    ]
+    
+    const finalUrls = allUrls.slice(0, limit)
+    crawlState.progress = `共 ${finalUrls.length} 个场地，开始爬取详情（跳过已存在的）...`
 
     // 先访问 WeddingWire 首页建立会话
     try {

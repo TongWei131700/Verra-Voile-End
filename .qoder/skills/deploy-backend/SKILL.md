@@ -17,7 +17,7 @@ description: 将后端代码打包部署到远程服务器，包括上传代码�
 ## 数据库配置
 
 - **DB_HOST**: `127.0.0.1`
-- **DB_PORT**: `13306`
+- **DB_PORT**: `3306`
 - **DB_USER**: `root`
 - **DB_PASSWORD**: `caoqiangiot@123`
 - **DB_NAME**: `verra_voile`
@@ -109,16 +109,31 @@ EXPECT_EOF
 
 ### 7. 同步本地数据库到服务器
 
-将本地 `verra_voile` 数据库的 `crawled_destinations` 表全量导出并导入服务器，确保线上数据与本地一致：
+将本地 `verra_voile` 数据库的**全量业务表**导出并导入服务器，确保线上数据与本地一致：
+
+**同步范围（业务数据表，本地为主）：**
+- 爬取数据：`crawled_destinations`, `crawled_venues`
+- 商品数据：`products`, `product_modules`, `products_catering`, `products_destination`, `products_dress`, `products_floral`, `products_other`, `products_team`, `products_wine`
+- 版本/配置：`data_versions`, `deploy_versions`, `wedding_teams`
+
+**不同步（服务器产生的用户数据）：**
+- `users`, `reservations`, `verification_codes`, `messages`, `user_selected_products`
+- 测试/快照表：`snapshot_*`, `test_*`, `testDestination`
 
 ```bash
-# 1. 本地导出全表（含表结构 + 数据）
-/usr/local/mysql/bin/mysqldump -u root verra_voile crawled_destinations --skip-lock-tables --routines --triggers > /tmp/full_crawled_destinations.sql
+# 1. 本地导出全量业务表（含表结构 + 数据）
+/usr/local/mysql/bin/mysqldump -u root verra_voile \
+  crawled_destinations crawled_venues \
+  products product_modules \
+  products_catering products_destination products_dress products_floral \
+  products_other products_team products_wine \
+  data_versions deploy_versions wedding_teams \
+  --skip-lock-tables --routines --triggers > /tmp/full_business_tables.sql
 
 # 2. 上传 SQL 到服务器
 expect << 'EXPECT_EOF'
-set timeout 30
-spawn scp -o StrictHostKeyChecking=no /tmp/full_crawled_destinations.sql root@47.99.138.250:/tmp/
+set timeout 60
+spawn scp -o StrictHostKeyChecking=no /tmp/full_business_tables.sql root@47.99.138.250:/tmp/
 expect {
     "password:" {
         send "TongWei131700\r"
@@ -128,10 +143,10 @@ expect {
 }
 EXPECT_EOF
 
-# 3. 服务器导入（DROP + CREATE + INSERT 全量替换）
+# 3. 服务器导入（全量替换业务表）
 expect << 'EXPECT_EOF'
-set timeout 30
-spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "mysql -h 127.0.0.1 -P 13306 -u root -p'caoqiangiot@123' verra_voile < /tmp/full_crawled_destinations.sql && echo DB_SYNC_OK"
+set timeout 60
+spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "mysql -h 127.0.0.1 -P 3306 -u root -p'caoqiangiot@123' verra_voile < /tmp/full_business_tables.sql && echo DB_SYNC_OK"
 expect {
     "password:" {
         send "TongWei131700\r"
@@ -142,7 +157,7 @@ expect {
 EXPECT_EOF
 ```
 
-> **注意**：此步骤会全量覆盖 `crawled_destinations` 表，服务器上的旧数据会被本地数据完全替换。
+> **注意**：此步骤会全量覆盖业务表，服务器上的爬取数据和商品数据会被本地数据完全替换。用户数据（订单、注册等）不受影响。
 
 ### 8. 验证部署
 

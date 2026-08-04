@@ -24,12 +24,6 @@ const PORT = process.env.PORT || 3000
 app.use(cors())
 app.use(express.json())
 
-// API 路由：允许 304 但禁止本地强缓存，每次都向服务器验证
-app.use('/api/', (req, res, next) => {
-  res.set('Cache-Control', 'no-cache')
-  next()
-})
-
 // 静态文件托管（上传图片）
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
