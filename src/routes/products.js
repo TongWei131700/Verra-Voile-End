@@ -4,6 +4,18 @@ const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ens
 const router = express.Router()
 
 /**
+ * 辅助：安全解析 JSON 数组字段
+ */
+function safeJsonArr(str) {
+  try {
+    const v = JSON.parse(str)
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
+
+/**
  * 辅助：动态发现所有 cd_ / cv_ 国家分表
  */
 async function getCountryTables(prefix) {
@@ -224,6 +236,46 @@ router.get('/crawled-venues/:slug', async (req, res) => {
 })
 
 /**
+ * GET /api/products/crawled-wedding-teams
+ * 获取爬取婚礼团队公司列表
+ */
+router.get('/crawled-wedding-teams', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, slug, name, name_cn, source_url, country, country_cn, city, city_cn,
+              tagline, LEFT(description, 200) AS description_preview,
+              founded_year, team_members, services, service_areas,
+              cover_image, website, sort_order, created_at
+       FROM crawled_wedding_teams ORDER BY sort_order ASC`
+    )
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('获取爬取婚礼团队列表失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-wedding-teams/:slug
+ * 获取单个爬取婚礼团队公司详情
+ */
+router.get('/crawled-wedding-teams/:slug', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM crawled_wedding_teams WHERE slug = ? LIMIT 1',
+      [req.params.slug]
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '婚礼团队不存在' })
+    }
+    res.json({ success: true, data: rows[0] })
+  } catch (error) {
+    console.error('获取爬取婚礼团队详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
  * GET /api/products/:moduleId
  * 获取指定种类及其商品列表（从对应的独立表查询）
  */
@@ -244,10 +296,25 @@ router.get('/:moduleId', async (req, res) => {
     // 确保该种类对应的表存在
     const tableName = await ensureCategoryTable(pool, moduleId)
 
+    // 检测表中是否存在详情页富字段（tagline/images/highlights/source_url）
+    const [colRows] = await pool.execute(`SHOW COLUMNS FROM \`${tableName}\``)
+    const colNames = colRows.map(c => c.Field)
+    const richCols = ['tagline', 'images', 'highlights', 'source_url'].filter(c => colNames.includes(c))
+    const richSelect = richCols.length > 0 ? ', ' + richCols.join(', ') : ''
+
     // 从对应的独立表中查询商品
-    const [products] = await pool.execute(
-      `SELECT product_id AS productId, name, name_en AS nameEn, description, image, price, unit, capacity, highlight, sort_order FROM \`${tableName}\` ORDER BY sort_order ASC`
+    const [rawProducts] = await pool.execute(
+      `SELECT product_id AS productId, name, name_en AS nameEn, description, image, price, unit, capacity, highlight, sort_order${richSelect} FROM \`${tableName}\` ORDER BY sort_order ASC`
     )
+
+    // JSON 字段解析为数组
+    const products = rawProducts.map(p => ({
+      ...p,
+      images: typeof p.images === 'string' && p.images ? safeJsonArr(p.images) : (Array.isArray(p.images) ? p.images : undefined),
+      highlights: typeof p.highlights === 'string' && p.highlights ? safeJsonArr(p.highlights) : (Array.isArray(p.highlights) ? p.highlights : undefined),
+      tagline: p.tagline || undefined,
+      sourceUrl: p.source_url || undefined,
+    }))
 
     const mod = modules[0]
     res.json({

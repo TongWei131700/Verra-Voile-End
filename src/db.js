@@ -134,6 +134,12 @@ async function initDB() {
   // 种子数据：插入默认商品模块和商品（仅首次为空时插入）
   await seedProducts(pool)
 
+  // 迁移：合并酒水与宴席模块，新增摄影模块（存量库兼容）
+  await syncWineCateringMerge(pool)
+
+  // 迁移：为酒水宴席商品表补充详情页富字段
+  await ensureWineRichColumns(pool)
+
   // 爬取目的地试验表
   await ensureCrawledDestinationsTable(pool)
   await seedCrawledDestinations(pool)
@@ -145,6 +151,15 @@ async function initDB() {
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
 }
+
+/**
+ * 摄影模块种子商品
+ */
+const photographySeedProducts = [
+  { category_id: 'photography', product_id: 'full-day', name: '婚礼当天全程跟拍', name_en: 'Full-Day Photography', description: '资深摄影师全天8小时跟拍，记录仪式每一个珍贵瞬间', image: 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=600&h=400&fit=crop', price: 1200, unit: '€', capacity: '全天8小时', highlight: '热门', sort_order: 1 },
+  { category_id: 'photography', product_id: 'prewedding', name: '婚纱旅拍', name_en: 'Pre-wedding Shoot', description: '目的地婚纱旅拍，精修照片20张，定格最美婚纱照', image: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=600&h=400&fit=crop', price: 800, unit: '€', capacity: '2小时精修20张', highlight: '推荐', sort_order: 2 },
+  { category_id: 'photography', product_id: 'album', name: '精修相册套装', name_en: 'Premium Photo Album', description: '电影级精修+30页典藏相册，留存永恒回忆', image: 'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=600&h=400&fit=crop', price: 300, unit: '€', capacity: '30页相册', highlight: '', sort_order: 3 },
+]
 
 /**
  * 种子数据：初始化商品模块和商品
@@ -164,9 +179,9 @@ async function seedProducts(pool) {
     { id: 'destination', name: '地点', name_en: 'Destination', image: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=600&h=800&fit=crop', description: '全球浪漫目的地', sort_order: 0 },
     { id: 'team', name: '婚礼团队', name_en: 'Wedding Team', image: 'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=600&h=800&fit=crop', description: '一站式婚礼现场服务', sort_order: 1 },
     { id: 'floral', name: '花卉', name_en: 'Floral', image: 'https://images.unsplash.com/photo-1487530811176-3780de880c2d?w=600&h=800&fit=crop', description: '浪漫花艺设计', sort_order: 2 },
-    { id: 'wine', name: '酒水', name_en: 'Wine & Dining', image: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=600&h=800&fit=crop', description: '精选婚宴佳酿', sort_order: 3 },
+    { id: 'wine', name: '酒水宴席', name_en: 'Wine & Dining', image: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=600&h=800&fit=crop', description: '精选婚宴佳酿与米其林级飨宴', sort_order: 3 },
     { id: 'dress', name: '礼服', name_en: 'Dress', image: 'https://images.unsplash.com/photo-1594552072238-b8a33785b261?w=600&h=800&fit=crop', description: '梦想中的嫁衣', sort_order: 4 },
-    { id: 'catering', name: '宴席', name_en: 'Catering', image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&h=800&fit=crop', description: '米其林级飨宴', sort_order: 5 },
+    { id: 'photography', name: '摄影', name_en: 'Photography', image: 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=600&h=800&fit=crop', description: '记录每一个珍贵瞬间', sort_order: 5 },
     { id: 'other', name: '其他', name_en: 'Others', image: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0afa?w=600&h=800&fit=crop', description: '包车及其他服务', sort_order: 6 },
   ]
 
@@ -185,9 +200,10 @@ async function seedProducts(pool) {
     { category_id: 'team', product_id: 'video', name: '婚礼视频', name_en: 'Wedding Film', description: '全程视频拍摄与电影级剪辑，记录每一个珍贵瞬间', image: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=600&h=400&fit=crop', price: 1000, unit: '€', capacity: '全天拍摄', highlight: '推荐', sort_order: 4 },
     // floral
     { category_id: 'floral', product_id: 'dahlia', name: '大丽花手捧花束', name_en: 'Dahlia Bouquet', description: '经典欧式手捧花设计，大丽花搭配尤加利叶，优雅大气', image: 'https://images.unsplash.com/photo-1487530811176-3780de880c2d?w=600&h=400&fit=crop', price: 500, unit: '€', capacity: '1束', highlight: '', sort_order: 1 },
-    // wine
-    { category_id: 'wine', product_id: 'maslina', name: 'Maslina Resort 酒店', name_en: 'Maslina Resort', description: '精品度假酒店住宿，地中海风格的私密空间', image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=400&fit=crop', price: 450, unit: '€', capacity: '含早餐', highlight: '', sort_order: 1 },
-    { category_id: 'wine', product_id: 'dinner', name: '酒店海边小晚宴', name_en: 'Seaside Dinner', description: '海滨私密晚宴体验，日落时分享用地中海美食', image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&h=400&fit=crop', price: 380, unit: '€', capacity: '6人宴席', highlight: '推荐', sort_order: 2 },
+    // wine（仅保留 Nobu 定制宴会，完整富数据由 scripts/insert-nobu-catering.cjs 写入）
+    { category_id: 'wine', product_id: 'nobu-catering', name: 'Nobu 定制宴会', name_en: 'Nobu Catering London', description: 'Nobu Hotel London Portman Square 定制宴会餐饮。坐席晚宴、鸡尾酒会 canapés、现场烹饪台与主厨大师课任选，服务覆盖酒店、办公室、私人住宅，甚至游艇与私人飞机。', image: 'https://www.nobuhotels.com/london-portman/content/uploads/2024/09/Nobu_Hotel_London_Portman_Square_Nobu_Terrace_Food_Cocktails_Platter_2.jpg', price: 0, unit: '——', capacity: '定制规模', highlight: '米其林名厨', sort_order: 1 },
+    // photography
+    ...photographySeedProducts,
     // other
     { category_id: 'other', product_id: 'car', name: '当天包车', name_en: 'Day Car Rental', description: '全天接送用车服务，含专业司机', image: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0afa?w=600&h=400&fit=crop', price: 100, unit: '€', capacity: '全天', highlight: '', sort_order: 1 },
   ]
@@ -202,6 +218,54 @@ async function seedProducts(pool) {
   }
 
   console.log('✓ 种子数据已插入（product_modules + 各类别独立商品表）')
+}
+
+/**
+ * 迁移：合并酒水与宴席（catering 并入 wine），新增摄影模块
+ * 针对存量数据库，新库由 seedProducts 直接生成最终状态
+ */
+async function syncWineCateringMerge(pool) {
+  // 1. 合并 catering 到 wine
+  const [catRows] = await pool.execute("SELECT id FROM product_modules WHERE id = 'catering'")
+  if (catRows.length > 0) {
+    await ensureCategoryTable(pool, 'catering')
+    await ensureCategoryTable(pool, 'wine')
+    const [catProducts] = await pool.execute('SELECT * FROM `products_catering`')
+    let merged = 0
+    for (const p of catProducts) {
+      const [exist] = await pool.execute('SELECT id FROM `products_wine` WHERE product_id = ?', [p.product_id])
+      if (exist.length > 0) continue
+      await pool.execute(
+        'INSERT INTO `products_wine` (product_id, name, name_en, description, image, price, unit, capacity, highlight, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [p.product_id, p.name, p.name_en || '', p.description || '', p.image || '', p.price || 0, p.unit || '€', p.capacity || '', p.highlight || '', (p.sort_order || 0) + 100]
+      )
+      merged++
+    }
+    await pool.execute("DELETE FROM product_modules WHERE id = 'catering'")
+    console.log(`✓ 已合并酒水与宴席模块（catering → wine，并入 ${merged} 条商品）`)
+  }
+
+  // 2. wine 模块更名为"酒水宴席"
+  await pool.execute(
+    "UPDATE product_modules SET name = '酒水宴席', name_en = 'Wine & Dining', description = '精选婚宴佳酿与米其林级飨宴' WHERE id = 'wine' AND name <> '酒水宴席'"
+  )
+
+  // 3. 新增摄影模块
+  const [photoRows] = await pool.execute("SELECT id FROM product_modules WHERE id = 'photography'")
+  const tableName = await ensureCategoryTable(pool, 'photography')
+  if (photoRows.length === 0) {
+    await pool.execute(
+      'INSERT INTO product_modules (id, name, name_en, image, description, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+      ['photography', '摄影', 'Photography', 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=600&h=800&fit=crop', '记录每一个珍贵瞬间', 5]
+    )
+    for (const p of photographySeedProducts) {
+      await pool.execute(
+        `INSERT INTO \`${tableName}\` (product_id, name, name_en, description, image, price, unit, capacity, highlight, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [p.product_id, p.name, p.name_en, p.description, p.image, p.price, p.unit, p.capacity, p.highlight, p.sort_order]
+      )
+    }
+    console.log(`✓ 新增摄影模块（photography，${photographySeedProducts.length} 条商品）`)
+  }
 }
 
 /**
@@ -276,6 +340,26 @@ async function migrateToPerCategoryTables(pool) {
   // 清空旧表（保留表结构以防回退）
   await pool.execute('DELETE FROM products')
   console.log('✓ 旧 products 表数据已清空（表结构保留）')
+}
+
+/**
+ * 迁移：为 products_wine 补充详情页富字段（tagline/images/highlights/source_url）
+ */
+async function ensureWineRichColumns(pool) {
+  await ensureCategoryTable(pool, 'wine')
+  const richColumns = [
+    { name: 'tagline', sql: "ADD COLUMN tagline VARCHAR(300) DEFAULT '' COMMENT '副标题/宣传语'" },
+    { name: 'images', sql: "ADD COLUMN images JSON COMMENT '图片URL列表'" },
+    { name: 'highlights', sql: "ADD COLUMN highlights JSON COMMENT '特色亮点列表'" },
+    { name: 'source_url', sql: "ADD COLUMN source_url VARCHAR(500) DEFAULT '' COMMENT '数据来源URL'" },
+  ]
+  for (const col of richColumns) {
+    const [cols] = await pool.execute(`SHOW COLUMNS FROM \`products_wine\` LIKE '${col.name}'`)
+    if (cols.length === 0) {
+      await pool.execute(`ALTER TABLE \`products_wine\` ${col.sql}`)
+      console.log(`✓ products_wine 已补充 ${col.name} 字段`)
+    }
+  }
 }
 
 /**

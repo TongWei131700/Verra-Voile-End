@@ -87,11 +87,31 @@ async function crawlVenue(page, venue) {
     await page.goto(venue.url, { waitUntil: 'domcontentloaded', timeout: 30000 })
     await wait(2000)
 
-    // 点击 "Read more" 展开完整描述
+    // 点击页面所有 "Read more" 展开折叠内容（描述、FAQ、评价等）
     try {
-      const readMoreBtns = await page.$$('.storefrontDescription__link')
-      for (const btn of readMoreBtns) { try { await btn.click() } catch {} }
-      await wait(500)
+      const readMoreSelectors = [
+        '.storefrontDescription__link',
+        '.storefrontFaq__link',
+        '.storefrontReviews__link',
+        '[class*="ReadMore"]',
+        '[class*="readMore"]',
+        'a[data-testid*="read-more"]',
+      ]
+      for (const sel of readMoreSelectors) {
+        const btns = await page.$$(sel)
+        for (const btn of btns) { try { await btn.click() } catch {} }
+      }
+      // 通用：点击所有包含 "Read more" / "Show more" 文本的可点击元素
+      await page.evaluate(() => {
+        const keywords = ['read more', 'show more', 'view more', 'see more', '展开', 'ver más']
+        document.querySelectorAll('a, button, span[role="button"]').forEach(el => {
+          const text = (el.textContent || '').toLowerCase().trim()
+          if (keywords.some(k => text.includes(k))) {
+            try { el.click() } catch {}
+          }
+        })
+      })
+      await wait(1500)
     } catch {}
 
     // 提取 JSON-LD
@@ -113,16 +133,34 @@ async function crawlVenue(page, venue) {
       if (ldData) break
     }
 
-    // 描述
+    // 描述（提取所有文本内容，包括 p、ul/li 等）
     let description = ''
     try {
-      const descEl = await page.$('.storefrontDescription__content')
-      if (descEl) {
-        description = await page.evaluate(el => {
-          const paragraphs = el.querySelectorAll('p')
-          if (paragraphs.length > 0) return Array.from(paragraphs).map(p => p.textContent.trim()).filter(t => t).join('\n\n')
-          return el.textContent.trim()
-        }, descEl)
+      // 优先从侧弹窗（Read more 弹窗）获取完整描述
+      const modalContent = await page.$('.sideModal__content, .modal__content.sideModal')
+      if (modalContent) {
+        const modalText = await page.evaluate(el => {
+          let text = el.innerText || el.textContent || ''
+          // 去除末尾的 "Read more" / "Hide" 等按钮文本
+          text = text.replace(/\s*(Read more|Hide|Show less|Ver m\u00e1s|Mostrar menos)\s*$/i, '')
+          const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+          return lines.join('\n\n').replace(/\n\n\n+/g, '\n\n').trim()
+        }, modalContent)
+        if (modalText && modalText.length > 100) {
+          description = modalText
+        }
+      }
+      // 如果没有弹窗或弹窗内容太短，从原描述区域提取
+      if (!description) {
+        const descEl = await page.$('.storefrontDescription__content')
+        if (descEl) {
+          description = await page.evaluate(el => {
+            let text = el.innerText || el.textContent || ''
+            text = text.replace(/\s*(Read more|Hide|Show less|Ver m\u00e1s|Mostrar menos)\s*$/i, '')
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+            return lines.join('\n\n').replace(/\n\n\n+/g, '\n\n').trim()
+          }, descEl)
+        }
       }
     } catch {}
     if (!description && ldData && ldData.description) description = ldData.description
@@ -174,23 +212,38 @@ async function crawlVenue(page, venue) {
       for (const img of imgList) {
         const imgUrl = typeof img === 'string' ? img : (img.contentUrl || img.url || '')
         if (imgUrl) {
-          const hd = imgUrl.replace(/(\/vendor\/\d+\/\d+_\d+)\/\d+(\/)/, '$1/1920$2').replace(/\?.*$/, '')
+          // 转换为高清：/640/ /960/ /1280/ 都转为 /1920/
+          const hd = imgUrl.replace(/\/(640|960|1280)\//, '/1920/').replace(/\?.*$/, '')
           if (!images.includes(hd)) images.push(hd)
         }
         if (images.length >= MAX_IMAGES) break
       }
     }
-    if (images.length === 0) {
+    // 如果图片不够，从 DOM 提取（包括滚动加载的图片）
+    if (images.length < 12) {
       try {
+        // 滚动页面加载更多图片
+        await page.evaluate(async () => {
+          const gallery = document.querySelector('.storefrontGallery, [class*="gallery"]')
+          if (gallery) {
+            for (let i = 0; i < 3; i++) {
+              gallery.scrollIntoView({ behavior: 'smooth' })
+              await new Promise(r => setTimeout(r, 500))
+            }
+          }
+        })
+        await wait(1500)
+        
         const domImages = await page.evaluate(() => {
           const imgs = document.querySelectorAll('img')
           return Array.from(imgs).map(img => img.src || img.getAttribute('data-src') || '').filter(src =>
-            src && (src.includes('cdn0.weddingwire.com/vendor/') || src.includes('cdn0.mariages.net/vendor/') || src.includes('cdn0.hitched.co.uk/vendor/'))
+            src && (src.includes('cdn0.weddingwire.com/vendor/') || src.includes('cdn0.mariages.net/vendor/') || src.includes('cdn0.hitched.co.uk/vendor/') || src.includes('cdn0.bodas.net/vendor/') || src.includes('cdn0.matrimonio.com/vendor/'))
           )
         })
-        const seen = new Set()
+        const seen = new Set(images)
         for (const url of domImages) {
-          const hd = url.replace(/(\/vendor\/\d+\/\d+_\d+)\/\d+(\/)/, '$1/1920$2').replace(/\?.*$/, '')
+          // 转换为高清
+          const hd = url.replace(/\/(640|960|1280)\//, '/1920/').replace(/\?.*$/, '')
           if (!seen.has(hd)) { seen.add(hd); images.push(hd) }
           if (images.length >= MAX_IMAGES) break
         }
@@ -218,6 +271,62 @@ async function crawlVenue(page, venue) {
       features = sentences.slice(0, 6).map(s => s.slice(0, 100))
     }
     if (rating && reviewCount > 0) features.push(`WeddingWire ${rating}分（${reviewCount}条评价）`)
+
+    // FAQ 提取
+    let faq = []
+    try {
+      // 方式1：结构化 FAQ 区域（Q&A 对）
+      const faqData = await page.evaluate(() => {
+        const result = []
+        // WeddingWire FAQ 区块
+        const faqSections = document.querySelectorAll('.storefrontFaq__section, .storefrontFaq__item, [class*="FaqItem"], [class*="faq-item"]')
+        faqSections.forEach(section => {
+          const q = section.querySelector('.storefrontFaq__question, [class*="question"], h3, h4, strong')
+          const a = section.querySelector('.storefrontFaq__answer, [class*="answer"], p')
+          if (q && a) {
+            result.push({ q: q.textContent.trim(), a: a.textContent.trim() })
+          }
+        })
+        // 方式2：通用 dt/dd 或 dl 结构
+        if (result.length === 0) {
+          const dts = document.querySelectorAll('dt, .faq-question, [class*="faqQ"]')
+          dts.forEach(dt => {
+            const dd = dt.nextElementSibling
+            if (dd && (dd.tagName === 'DD' || dd.classList.contains('faq-answer') || dd.classList.contains('faqA'))) {
+              result.push({ q: dt.textContent.trim(), a: dd.textContent.trim() })
+            }
+          })
+        }
+        // 方式3：底部 FAQ 区块（WeddingWire 页面底部的 "Frequently Asked Questions"）
+        if (result.length === 0) {
+          const allH2 = document.querySelectorAll('h2, h3')
+          for (const h of allH2) {
+            if (h.textContent.toLowerCase().includes('frequently asked') || h.textContent.toLowerCase().includes('faq')) {
+              let sibling = h.nextElementSibling
+              while (sibling && sibling.tagName !== 'H2' && sibling.tagName !== 'H3') {
+                const qEl = sibling.querySelector('strong, b, [class*="question"]')
+                const aEl = sibling.querySelector('p, span, [class*="answer"]')
+                if (qEl && aEl) {
+                  result.push({ q: qEl.textContent.trim(), a: aEl.textContent.trim() })
+                } else if (sibling.tagName === 'P' || sibling.tagName === 'DIV') {
+                  const text = sibling.textContent.trim()
+                  if (text.includes('?')) {
+                    const parts = text.split('?')
+                    if (parts.length >= 2) {
+                      result.push({ q: parts[0] + '?', a: parts.slice(1).join('?').trim() })
+                    }
+                  }
+                }
+                sibling = sibling.nextElementSibling
+              }
+              if (result.length > 0) break
+            }
+          }
+        }
+        return result
+      })
+      faq = faqData
+    } catch {}
 
     // 默认值
     if (venueTypes.length === 0) {
@@ -254,7 +363,7 @@ async function crawlVenue(page, venue) {
       cover_image: coverImage, source_url: venue.url,
       rating, review_count: reviewCount,
       location: towns.length > 0 ? towns[0].name : '',
-      faq: JSON.stringify([]),
+      faq: JSON.stringify(faq),
     }
     result.success = true
   } catch (err) {
@@ -271,13 +380,13 @@ async function main() {
   const pool = await mysql.createPool(DB_CONFIG)
   console.log('✓ 数据库已连接')
 
-  const browser = await puppeteer.launch({
+  let browser = await puppeteer.launch({
     executablePath: CHROME_PATH, headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
   })
   console.log('✓ 浏览器已启动')
 
-  const page = await browser.newPage()
+  let page = await browser.newPage()
   await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
   try {
@@ -291,41 +400,96 @@ async function main() {
   const cdTable = `cd_${config.suffix}`
   let successCount = 0, failCount = 0, skipCount = 0
   const failures = []
+  let consecutiveTimeouts = 0
+
+  // 预先加载已有 slug，避免重复爬取
+  const [existingRows] = await pool.execute(`SELECT slug FROM \`${cvTable}\``)
+  const existingSlugs = new Set(existingRows.map(r => r.slug))
+  console.log(`✓ 已有 ${existingSlugs.size} 条数据，将跳过已存在的`)
+
+  // 浏览器重启函数
+  async function restartBrowser(state) {
+    try { await state.browser.close() } catch {}
+    await new Promise(r => setTimeout(r, 3000))
+    state.browser = await puppeteer.launch({
+      executablePath: CHROME_PATH, headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    })
+    console.log('  ♻ 浏览器已完全重启')
+  }
+
+  // 创建新 page（用于超时后恢复）
+  async function freshPage(state) {
+    try { await state.page.close() } catch {}
+    state.page = await state.browser.newPage()
+    await state.page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    try {
+      await state.page.goto('https://www.weddingwire.com/', { waitUntil: 'domcontentloaded', timeout: 15000 })
+    } catch {}
+  }
+
+  // 使用 state 对象管理 browser/page 引用
+  const state = { browser, page }
 
   for (let i = 0; i < VENUES.length; i++) {
     const venue = VENUES[i]
+    const slug = makeSlug(venue.name)
+    
+    // 预检查：跳过已存在的
+    if (existingSlugs.has(slug)) {
+      skipCount++
+      continue
+    }
+    
     if ((i + 1) % 20 === 0 || i === 0) {
       console.log(`\n--- 进度: ${i + 1}/${VENUES.length} ---`)
     }
     console.log(`[${i + 1}/${VENUES.length}] ${venue.name}`)
 
-    const result = await crawlVenue(page, venue)
+    let result
+    try {
+      result = await Promise.race([
+        crawlVenue(state.page, venue),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('单场地超时(45s)')), 45000))
+      ])
+      consecutiveTimeouts = 0  // 成功则重置计数
+    } catch (timeoutErr) {
+      consecutiveTimeouts++
+      console.log(`  ✗ ${timeoutErr.message} (连续${consecutiveTimeouts}次)`)
+      failures.push({ name: venue.name, error: timeoutErr.message })
+      failCount++
+      
+      // 连续3次超时，重启整个浏览器
+      if (consecutiveTimeouts >= 3) {
+        await restartBrowser(state)
+        await freshPage(state)
+        consecutiveTimeouts = 0
+      } else {
+        // 单次超时：创建新 page
+        await freshPage(state)
+      }
+      continue
+    }
 
     if (result.success && result.data) {
       const d = result.data
       try {
-        const [existing] = await pool.execute(`SELECT id FROM \`${cvTable}\` WHERE slug = ?`, [d.slug])
-        if (existing.length > 0) {
-          console.log(`  ⏭ 已存在，跳过`)
-          skipCount++
-        } else {
-          await pool.execute(
-            `INSERT INTO \`${cvTable}\` (slug,name,name_cn,country,country_cn,source_url,tagline,tagline_cn,description,description_cn,features,venue_types,towns,images,budget_ranges,guest_capacities,faq,cover_image,rating,review_count,location,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [d.slug,d.name,d.name_cn,config.country,config.countryCn,d.source_url,d.tagline,d.tagline_cn,d.description,d.description_cn,d.features,d.venue_types,d.towns,d.images,d.budget_ranges,d.guest_capacities,d.faq,d.cover_image,d.rating||'',d.review_count||'0',d.location||'',100+i]
-          )
-          await pool.execute(
-            `INSERT INTO \`${cdTable}\` (slug,name,name_cn,country,country_cn,source_url,tagline,tagline_cn,description,description_cn,features,venue_types,towns,images,budget_ranges,guest_capacities,faq,cover_image,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [d.slug,d.name,d.name_cn,config.country,config.countryCn,d.source_url,d.tagline,d.tagline_cn,d.description,d.description_cn,d.features,d.venue_types,d.towns,d.images,d.budget_ranges,d.guest_capacities,d.faq,d.cover_image,100+i]
-          )
-          const prodSlug = d.slug.slice(0, 50).replace(/-$/, '')
-          await pool.execute(
-            `INSERT INTO products (category_id,product_id,name,name_en,description,image,price,unit,highlight) VALUES (?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name)`,
-            ['destination',prodSlug,d.name,d.name,`${config.countryCn}婚礼场地`,d.cover_image,0,'€',config.countryCn+'精选']
-          )
-          const imgCount = JSON.parse(d.images).length
-          console.log(`  ✓ 图片${imgCount}张`)
-          successCount++
-        }
+        await pool.execute(
+          `INSERT INTO \`${cvTable}\` (slug,name,name_cn,country,country_cn,source_url,tagline,tagline_cn,description,description_cn,features,venue_types,towns,images,budget_ranges,guest_capacities,faq,cover_image,rating,review_count,location,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [d.slug,d.name,d.name_cn,config.country,config.countryCn,d.source_url,d.tagline,d.tagline_cn,d.description,d.description_cn,d.features,d.venue_types,d.towns,d.images,d.budget_ranges,d.guest_capacities,d.faq,d.cover_image,d.rating||'',d.review_count||'0',d.location||'',100+i]
+        )
+        await pool.execute(
+          `INSERT INTO \`${cdTable}\` (slug,name,name_cn,country,country_cn,source_url,tagline,tagline_cn,description,description_cn,features,venue_types,towns,images,budget_ranges,guest_capacities,faq,cover_image,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [d.slug,d.name,d.name_cn,config.country,config.countryCn,d.source_url,d.tagline,d.tagline_cn,d.description,d.description_cn,d.features,d.venue_types,d.towns,d.images,d.budget_ranges,d.guest_capacities,d.faq,d.cover_image,100+i]
+        )
+        const prodSlug = d.slug.slice(0, 50).replace(/-$/, '')
+        await pool.execute(
+          `INSERT INTO products (category_id,product_id,name,name_en,description,image,price,unit,highlight) VALUES (?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name)`,
+          ['destination',prodSlug,d.name,d.name,`${config.countryCn}婚礼场地`,d.cover_image,0,'€',config.countryCn+'精选']
+        )
+        const imgCount = JSON.parse(d.images).length
+        console.log(`  ✓ 图片${imgCount}张`)
+        successCount++
       } catch (dbErr) {
         console.error(`  ✗ DB错误: ${dbErr.message}`)
         failures.push({ name: venue.name, error: dbErr.message })
@@ -335,12 +499,16 @@ async function main() {
       console.log(`  ✗ 爬取失败: ${result.error}`)
       failures.push({ name: venue.name, error: result.error })
       failCount++
+      // 如果是 detached Frame 错误，创建新 page
+      if (result.error && (result.error.includes('detached') || result.error.includes('Navigation'))) {
+        await freshPage(state)
+      }
     }
 
     if (i < VENUES.length - 1) await wait(1200 + Math.random() * 800)
   }
 
-  await browser.close()
+  await state.browser.close()
   await pool.end()
 
   const elapsed = Math.round((Date.now() - startTime) / 1000)
