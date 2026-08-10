@@ -147,6 +147,9 @@ async function initDB() {
   // 婚礼团队表
   await ensureWeddingTeamsTable(pool)
 
+  // 爬取摄影师表
+  await ensureCrawledPhotographersTable(pool)
+
   // 目的地场地表（含城市分组字段）
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
@@ -1211,4 +1214,41 @@ async function ensureWeddingTeamsTable(pool) {
   console.log('✓ 表 wedding_teams 已就绪')
 }
 
-module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable }
+/**
+ * 创建爬取摄影师表
+ */
+async function ensureCrawledPhotographersTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS crawled_photographers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(150) NOT NULL COMMENT 'URL标识',
+      name VARCHAR(200) NOT NULL COMMENT '摄影师英文名',
+      name_cn VARCHAR(200) DEFAULT '' COMMENT '摄影师中文名',
+      source_url VARCHAR(500) DEFAULT '' COMMENT '爬取来源URL',
+      source_name VARCHAR(200) DEFAULT '' COMMENT '来源名称',
+      category VARCHAR(100) DEFAULT '' COMMENT '分类标识（如 south-france, italy）',
+      category_cn VARCHAR(100) DEFAULT '' COMMENT '分类中文（如 南法 · 私密婚礼）',
+      country VARCHAR(100) DEFAULT '' COMMENT '国家中文',
+      country_en VARCHAR(100) DEFAULT '' COMMENT '国家英文',
+      tagline VARCHAR(500) DEFAULT '' COMMENT '宣传语/标语',
+      description TEXT COMMENT '摄影师介绍',
+      photo_styles JSON COMMENT '摄影风格标签列表',
+      highlights JSON COMMENT '亮点标签列表',
+      style JSON COMMENT '摄影风格详细分组',
+      cover_image VARCHAR(500) DEFAULT '' COMMENT '封面图URL',
+      headshot VARCHAR(500) DEFAULT '' COMMENT '头像URL',
+      images JSON COMMENT '图片URL列表',
+      video_url VARCHAR(500) DEFAULT '' COMMENT '视频URL',
+      website VARCHAR(500) DEFAULT '' COMMENT '官网地址',
+      price INT DEFAULT NULL COMMENT '起步价（欧元）',
+      sort_order INT DEFAULT 0 COMMENT '排序权重',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_slug (slug),
+      INDEX idx_country (country),
+      INDEX idx_category (category)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='爬取摄影师表'
+  `)
+  console.log('✓ 表 crawled_photographers 已就绪')
+}
+
+module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable }

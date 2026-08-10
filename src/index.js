@@ -16,6 +16,7 @@ const productsRouter = require('./routes/products')
 const versionRouter = require('./routes/version')
 const crawlRouter = require('./routes/crawl')
 const dataVersionRouter = require('./routes/dataVersion')
+const imageProxyRouter = require('./routes/imageProxy')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -38,6 +39,7 @@ app.use('/api/products', productsRouter)
 app.use('/api/version', versionRouter)
 app.use('/api/crawl', crawlRouter)
 app.use('/api/data-version', dataVersionRouter)
+app.use('/api/image-proxy', imageProxyRouter)
 
 // 健康检查
 app.get('/health', (req, res) => {
@@ -65,6 +67,7 @@ async function start() {
       console.log(`  - GET  /health           健康检查`)
       console.log(`  - POST /api/crawl/start    触发爬取任务`)
       console.log(`  - GET  /api/crawl/state    查看爬取状态`)
+      console.log(`  - GET  /api/image-proxy    图片代理`)
     })
   } catch (error) {
     console.error('启动失败:', error.message)

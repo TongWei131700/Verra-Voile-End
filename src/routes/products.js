@@ -276,6 +276,46 @@ router.get('/crawled-wedding-teams/:slug', async (req, res) => {
 })
 
 /**
+ * GET /api/products/crawled-photographers
+ * 获取爬取摄影师列表
+ */
+router.get('/crawled-photographers', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, slug, name, name_cn, country, country_en, category, category_cn,
+              tagline, LEFT(description, 200) AS description_preview,
+              photo_styles, highlights, cover_image, headshot, website, price,
+              video_url, sort_order, created_at
+       FROM crawled_photographers ORDER BY sort_order ASC`
+    )
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('获取摄影师列表失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-photographers/:slug
+ * 获取单个摄影师详情
+ */
+router.get('/crawled-photographers/:slug', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM crawled_photographers WHERE slug = ? LIMIT 1',
+      [req.params.slug]
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '摄影师不存在' })
+    }
+    res.json({ success: true, data: rows[0] })
+  } catch (error) {
+    console.error('获取摄影师详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
  * GET /api/products/:moduleId
  * 获取指定种类及其商品列表（从对应的独立表查询）
  */
