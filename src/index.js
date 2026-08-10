@@ -25,8 +25,8 @@ const PORT = process.env.PORT || 3000
 app.use(cors())
 app.use(express.json())
 
-// 静态文件托管（上传图片）
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+// 静态文件托管（上传图片）—— 浏览器缓存 30 天，避免返回列表页时重复请求
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { maxAge: '30d' }))
 
 // 路由
 app.use('/api/reservation', reservationRouter)
