@@ -22,6 +22,14 @@ const ALLOWED_DOMAINS = [
   'cdn0.hitched.co.uk',
   'cdn0.mariages.net',
   'images.unsplash.com',
+  'sposiamovi.it',
+  'www.sposiamovi.it',
+  'la-fete.com',
+  'www.la-fete.com',
+  'aimeedunne.com',
+  'www.aimeedunne.com',
+  'www.amarantelondon.com',
+  'amarantelondon.com',
 ]
 
 // 缓存 TTL：7 天（毫秒）
@@ -80,6 +88,13 @@ router.get('/', async (req, res) => {
   }
 
   // 从远程下载
+  let responded = false
+  const safeSend = (status, body) => {
+    if (responded || res.headersSent) return
+    responded = true
+    res.status(status).json(body)
+  }
+
   const client = parsed.protocol === 'https:' ? https : http
   const request = client.get(imageUrl, {
     headers: {
@@ -96,7 +111,7 @@ router.get('/', async (req, res) => {
     }
 
     if (remoteRes.statusCode !== 200) {
-      return res.status(remoteRes.statusCode).json({ error: `远程图片返回 ${remoteRes.statusCode}` })
+      return safeSend(remoteRes.statusCode, { error: `远程图片返回 ${remoteRes.statusCode}` })
     }
 
     const contentType = remoteRes.headers['content-type'] || getContentType(ext)
@@ -121,13 +136,13 @@ router.get('/', async (req, res) => {
     console.error('[image-proxy] 请求失败:', imageUrl, err.message)
     // 清理可能的残留缓存
     if (fs.existsSync(cacheFile)) fs.unlinkSync(cacheFile)
-    res.status(502).json({ error: '图片获取失败' })
+    safeSend(502, { error: '图片获取失败' })
   })
 
   request.on('timeout', () => {
     request.destroy()
     if (fs.existsSync(cacheFile)) fs.unlinkSync(cacheFile)
-    res.status(504).json({ error: '图片请求超时' })
+    safeSend(504, { error: '图片请求超时' })
   })
 })
 

@@ -1,5 +1,5 @@
 const express = require('express')
-const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable } = require('../db')
+const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledFloristsTable } = require('../db')
 
 const router = express.Router()
 
@@ -244,8 +244,8 @@ router.get('/crawled-wedding-teams', async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT id, slug, name, name_cn, source_url, country, country_cn, city, city_cn,
               tagline, LEFT(description, 200) AS description_preview,
-              founded_year, team_members, services, service_areas,
-              cover_image, website, sort_order, created_at
+              founded_year, specialties, service_areas,
+              cover_image, headshot, website, price, sort_order, created_at
        FROM crawled_wedding_teams ORDER BY sort_order ASC`
     )
     res.json({ success: true, data: rows })
@@ -311,6 +311,47 @@ router.get('/crawled-photographers/:slug', async (req, res) => {
     res.json({ success: true, data: rows[0] })
   } catch (error) {
     console.error('获取摄影师详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-florists
+ * 获取爬取花店列表
+ */
+router.get('/crawled-florists', async (req, res) => {
+  try {
+    await ensureCrawledFloristsTable(pool)
+    const [rows] = await pool.execute(
+      `SELECT id, slug, name, name_cn, source_url, country, country_cn, city, city_cn,
+              tagline, LEFT(description, 200) AS description_preview,
+              specialties, cover_image, headshot, website, price, sort_order, created_at
+       FROM crawled_florists ORDER BY sort_order ASC`
+    )
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('获取爬取花店列表失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-florists/:slug
+ * 获取单个花店详情
+ */
+router.get('/crawled-florists/:slug', async (req, res) => {
+  try {
+    await ensureCrawledFloristsTable(pool)
+    const [rows] = await pool.execute(
+      'SELECT * FROM crawled_florists WHERE slug = ? LIMIT 1',
+      [req.params.slug]
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '花店不存在' })
+    }
+    res.json({ success: true, data: rows[0] })
+  } catch (error) {
+    console.error('获取爬取花店详情失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })

@@ -150,6 +150,9 @@ async function initDB() {
   // 爬取摄影师表
   await ensureCrawledPhotographersTable(pool)
 
+  // 爬取花店表
+  await ensureCrawledFloristsTable(pool)
+
   // 目的地场地表（含城市分组字段）
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
@@ -1251,4 +1254,52 @@ async function ensureCrawledPhotographersTable(pool) {
   console.log('✓ 表 crawled_photographers 已就绪')
 }
 
-module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable }
+/**
+ * 创建爬取花店表
+ */
+async function ensureCrawledFloristsTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS crawled_florists (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(150) NOT NULL COMMENT 'URL标识',
+      name VARCHAR(200) NOT NULL COMMENT '花店英文名',
+      name_cn VARCHAR(200) DEFAULT '' COMMENT '花店中文名',
+      source_url VARCHAR(500) DEFAULT '' COMMENT '爬取来源URL',
+      country VARCHAR(100) DEFAULT '' COMMENT '所在国家英文',
+      country_cn VARCHAR(100) DEFAULT '' COMMENT '所在国家中文',
+      city VARCHAR(100) DEFAULT '' COMMENT '所在城市英文',
+      city_cn VARCHAR(100) DEFAULT '' COMMENT '所在城市中文',
+      tagline VARCHAR(500) DEFAULT '' COMMENT '宣传语/标语',
+      description TEXT COMMENT '花店介绍',
+      founded_year INT DEFAULT NULL COMMENT '成立年份',
+      team_members JSON COMMENT '团队成员列表',
+      services JSON COMMENT '婚礼服务列表',
+      specialties JSON COMMENT '特色标签',
+      design_process JSON COMMENT '设计流程',
+      pricing_comparison JSON COMMENT '价格对比',
+      wedding_venues JSON COMMENT '合作婚礼场地',
+      wedding_stories JSON COMMENT '婚礼故事案例',
+      fresh_flower_products JSON COMMENT '鲜花产品',
+      infinity_rose_products JSON COMMENT '永生玫瑰产品',
+      testimonials JSON COMMENT '客户评价',
+      faq JSON COMMENT '常见问题',
+      portfolio_images JSON COMMENT '婚礼作品集图片',
+      cover_image VARCHAR(500) DEFAULT '' COMMENT '封面图URL',
+      headshot VARCHAR(500) DEFAULT '' COMMENT '头像/创始人图URL',
+      website VARCHAR(500) DEFAULT '' COMMENT '官网地址',
+      phone VARCHAR(50) DEFAULT '' COMMENT '联系电话',
+      email VARCHAR(200) DEFAULT '' COMMENT '邮箱',
+      address VARCHAR(500) DEFAULT '' COMMENT '地址',
+      rating JSON COMMENT '评分信息',
+      media_features JSON COMMENT '媒体报道',
+      price INT DEFAULT NULL COMMENT '起步价（英镑）',
+      sort_order INT DEFAULT 0 COMMENT '排序权重',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_slug (slug),
+      INDEX idx_country (country)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='爬取花店表'
+  `)
+  console.log('✓ 表 crawled_florists 已就绪')
+}
+
+module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable }
