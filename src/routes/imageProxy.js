@@ -30,6 +30,13 @@ const ALLOWED_DOMAINS = [
   'www.aimeedunne.com',
   'www.amarantelondon.com',
   'amarantelondon.com',
+  'images.squarespace-cdn.com',
+  'www.flowersbyarvoredeluz.com',
+  'static.wixstatic.com',
+  'www.dirtyblossom.co',
+  'dirtyblossom.co',
+  'medias.florajet.com',
+  'www.florajet.com',
 ]
 
 // 缓存 TTL：7 天（毫秒）

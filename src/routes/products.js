@@ -322,12 +322,21 @@ router.get('/crawled-photographers/:slug', async (req, res) => {
 router.get('/crawled-florists', async (req, res) => {
   try {
     await ensureCrawledFloristsTable(pool)
-    const [rows] = await pool.execute(
-      `SELECT id, slug, name, name_cn, source_url, country, country_cn, city, city_cn,
+    const { type } = req.query
+    let query = `SELECT id, slug, name, name_cn, source_url, country, country_cn, city, city_cn,
               tagline, LEFT(description, 200) AS description_preview,
               specialties, cover_image, headshot, website, price, sort_order, created_at
-       FROM crawled_florists ORDER BY sort_order ASC`
-    )
+       FROM crawled_florists`
+    const params = []
+    
+    if (type) {
+      query += ' WHERE type = ?'
+      params.push(type)
+    }
+    
+    query += ' ORDER BY sort_order ASC'
+    
+    const [rows] = await pool.execute(query, params)
     res.json({ success: true, data: rows })
   } catch (error) {
     console.error('获取爬取花店列表失败:', error)
