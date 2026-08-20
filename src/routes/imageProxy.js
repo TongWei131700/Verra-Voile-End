@@ -37,6 +37,8 @@ const ALLOWED_DOMAINS = [
   'dirtyblossom.co',
   'medias.florajet.com',
   'www.florajet.com',
+  'cdn0.matrimonio.com',
+  'cdn0.bodas.net',
 ]
 
 // 缓存 TTL：7 天（毫秒）

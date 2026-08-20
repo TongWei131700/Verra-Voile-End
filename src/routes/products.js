@@ -1,5 +1,5 @@
 const express = require('express')
-const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledFloristsTable } = require('../db')
+const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable } = require('../db')
 
 const router = express.Router()
 
@@ -192,45 +192,42 @@ router.get('/crawled-destinations/:slug', async (req, res) => {
 
 /**
  * GET /api/products/crawled-venues
- * 获取爬取场地列表（从所有国家分表），可选 country_cn 筛选
+ * 获取爬取目的地场地列表（新架构）
  */
 router.get('/crawled-venues', async (req, res) => {
   try {
-    const { country_cn } = req.query
-    const tables = await getCountryTables('cv')
-    if (tables.length === 0) return res.json({ success: true, data: [] })
-
-    const selects = tables.map(t => {
-      if (country_cn) {
-        return `SELECT * FROM \`${t}\` WHERE country_cn = ?`
-      }
-      return `SELECT * FROM \`${t}\``
-    })
-    const params = country_cn ? tables.map(() => country_cn).flat() : []
+    await ensureCrawledVenuesTable(pool)
     const [rows] = await pool.execute(
-      selects.join(' UNION ALL ') + ' ORDER BY sort_order ASC, id ASC',
-      params
+      `SELECT id, slug, name, name_cn, country, country_cn, region, city, city_cn,
+              tagline, tagline_cn,
+              LEFT(COALESCE(NULLIF(description_cn, ''), description), 200) AS description_preview,
+              cover_image, venue_types, capacity, source_name, price, price_unit, sort_order, created_at
+       FROM crawled_venues ORDER BY sort_order ASC`
     )
     res.json({ success: true, data: rows })
   } catch (error) {
-    console.error('获取爬取场地列表失败:', error)
+    console.error('获取爬取目的地场地列表失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })
 
 /**
  * GET /api/products/crawled-venues/:slug
- * 获取单个爬取场地详情（从所有国家分表查找）
+ * 获取单个目的地场地详情
  */
 router.get('/crawled-venues/:slug', async (req, res) => {
   try {
-    const data = await findVenueBySlug(req.params.slug)
-    if (!data) {
+    await ensureCrawledVenuesTable(pool)
+    const [rows] = await pool.execute(
+      'SELECT * FROM crawled_venues WHERE slug = ? LIMIT 1',
+      [req.params.slug]
+    )
+    if (rows.length === 0) {
       return res.status(404).json({ success: false, message: '场地不存在' })
     }
-    res.json({ success: true, data })
+    res.json({ success: true, data: rows[0] })
   } catch (error) {
-    console.error('获取爬取场地详情失败:', error)
+    console.error('获取爬取目的地场地详情失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })

@@ -153,6 +153,9 @@ async function initDB() {
   // 爬取花店表
   await ensureCrawledFloristsTable(pool)
 
+  // 爬取目的地场地表（新）
+  await ensureCrawledVenuesTable(pool)
+
   // 目的地场地表（含城市分组字段）
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
@@ -1302,4 +1305,48 @@ async function ensureCrawledFloristsTable(pool) {
   console.log('✓ 表 crawled_florists 已就绪')
 }
 
-module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable }
+/**
+ * 创建爬取目的地场地表（新架构）
+ */
+async function ensureCrawledVenuesTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS crawled_venues (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(150) NOT NULL COMMENT 'URL标识',
+      name VARCHAR(200) NOT NULL COMMENT '场地英文名',
+      name_cn VARCHAR(200) DEFAULT '' COMMENT '场地中文名',
+      country VARCHAR(100) DEFAULT '' COMMENT '国家英文',
+      country_cn VARCHAR(100) DEFAULT '' COMMENT '国家中文',
+      region VARCHAR(100) DEFAULT '' COMMENT '大区/州（如 Puglia）',
+      city VARCHAR(100) DEFAULT '' COMMENT '城市英文',
+      city_cn VARCHAR(100) DEFAULT '' COMMENT '城市中文',
+      address VARCHAR(500) DEFAULT '' COMMENT '详细地址',
+      postal_code VARCHAR(20) DEFAULT '' COMMENT '邮编',
+      latitude DECIMAL(10,6) DEFAULT NULL COMMENT '纬度',
+      longitude DECIMAL(10,6) DEFAULT NULL COMMENT '经度',
+      tagline VARCHAR(500) DEFAULT '' COMMENT '宣传语',
+      description TEXT COMMENT '场地完整介绍',
+      cover_image VARCHAR(500) DEFAULT '' COMMENT '封面图URL',
+      gallery_images JSON COMMENT '图集（JSON数组）',
+      venue_types JSON COMMENT '场地类型标签（JSON数组）',
+      amenities JSON COMMENT '设施服务（JSON数组）',
+      capacity VARCHAR(100) DEFAULT '' COMMENT '容纳人数',
+      built_year VARCHAR(50) DEFAULT '' COMMENT '建造年代',
+      land_size VARCHAR(100) DEFAULT '' COMMENT '占地面积',
+      phone VARCHAR(50) DEFAULT '' COMMENT '联系电话',
+      website VARCHAR(500) DEFAULT '' COMMENT '官网',
+      source_url VARCHAR(500) DEFAULT '' COMMENT '爬取来源URL',
+      source_name VARCHAR(200) DEFAULT '' COMMENT '来源名称',
+      price INT DEFAULT NULL COMMENT '起步价',
+      price_unit VARCHAR(20) DEFAULT '' COMMENT '价格单位',
+      sort_order INT DEFAULT 0 COMMENT '排序权重',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_slug (slug),
+      INDEX idx_country (country),
+      INDEX idx_city (city)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='爬取目的地场地表'
+  `)
+  console.log('✓ 表 crawled_venues 已就绪')
+}
+
+module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable }
