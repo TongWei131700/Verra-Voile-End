@@ -966,4 +966,4 @@ async function crawlFranceVenues(limit = 57) {
   }
 }
 
-module.exports = { crawlGreeceDestinations, crawlUKVenues, crawlFranceVenues, getCrawlState }
+module.exports = { crawlUKVenues, crawlFranceVenues, getCrawlState }

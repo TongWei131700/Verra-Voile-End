@@ -1,6 +1,6 @@
 /**
  * 数据版本控制 API
- * 支持多表数据快照管理 (crawled_destinations, testDestination 等)
+ * 支持多表数据快照管理
  */
 const express = require('express')
 const { pool } = require('../db')
@@ -8,7 +8,7 @@ const { pool } = require('../db')
 const router = express.Router()
 
 // 允许管理的表白名单
-const MANAGED_TABLES = ['crawled_destinations', 'testDestination']
+const MANAGED_TABLES = ['crawled_venues']
 
 /**
  * 初始化 data_versions 表（增加 source_table 字段）
@@ -56,7 +56,7 @@ router.get('/tables', async (req, res) => {
           name: tableName,
           record_count: rows[0].cnt,
           version_count: versions[0].cnt,
-          label: tableName === 'crawled_destinations' ? '正式数据表' : '试验数据表'
+          label: tableName
         })
       } catch (e) {
         // 表不存在则跳过
