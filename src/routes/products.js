@@ -1,5 +1,5 @@
 const express = require('express')
-const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable } = require('../db')
+const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable } = require('../db')
 
 const router = express.Router()
 
@@ -358,6 +358,48 @@ router.get('/crawled-florists/:slug', async (req, res) => {
     res.json({ success: true, data: rows[0] })
   } catch (error) {
     console.error('获取爬取花店详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-dresses
+ * 获取爬取礼服商品列表
+ */
+router.get('/crawled-dresses', async (req, res) => {
+  try {
+    await ensureCrawledDressesTable(pool)
+    const [rows] = await pool.execute(
+      `SELECT id, slug, name, name_en, category, category_cn, tagline,
+              LEFT(description, 200) AS description_preview,
+              highlights, cover_image, images, video_url,
+              source_name, source_url, price, sort_order, created_at
+       FROM crawled_dresses ORDER BY sort_order ASC`
+    )
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('获取爬取礼服列表失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-dresses/:slug
+ * 获取单个爬取礼服商品详情
+ */
+router.get('/crawled-dresses/:slug', async (req, res) => {
+  try {
+    await ensureCrawledDressesTable(pool)
+    const [rows] = await pool.execute(
+      'SELECT * FROM crawled_dresses WHERE slug = ? LIMIT 1',
+      [req.params.slug]
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '礼服商品不存在' })
+    }
+    res.json({ success: true, data: rows[0] })
+  } catch (error) {
+    console.error('获取爬取礼服详情失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })

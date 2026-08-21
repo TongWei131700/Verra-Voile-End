@@ -152,6 +152,9 @@ async function initDB() {
   // 爬取目的地场地表（新）
   await ensureCrawledVenuesTable(pool)
 
+  // 爬取礼服商品表
+  await ensureCrawledDressesTable(pool)
+
   // 目的地场地表（含城市分组字段）
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
@@ -628,4 +631,34 @@ async function ensureCrawledVenuesTable(pool) {
   console.log('✓ 表 crawled_venues 已就绪')
 }
 
-module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable }
+/**
+ * 创建爬取礼服商品表
+ */
+async function ensureCrawledDressesTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS crawled_dresses (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(150) NOT NULL COMMENT 'URL标识',
+      name VARCHAR(200) NOT NULL COMMENT '中文名',
+      name_en VARCHAR(200) DEFAULT '' COMMENT '英文名',
+      category VARCHAR(100) DEFAULT '' COMMENT '分类key',
+      category_cn VARCHAR(100) DEFAULT '' COMMENT '分类显示名',
+      tagline VARCHAR(500) DEFAULT '' COMMENT '宣传语',
+      description TEXT COMMENT '商品描述',
+      highlights JSON COMMENT '亮点标签列表',
+      cover_image VARCHAR(500) DEFAULT '' COMMENT '封面图URL',
+      images JSON COMMENT '图片URL列表',
+      video_url VARCHAR(500) DEFAULT '' COMMENT '视频URL',
+      source_name VARCHAR(200) DEFAULT '' COMMENT '来源名称',
+      source_url VARCHAR(500) DEFAULT '' COMMENT '来源URL',
+      price INT DEFAULT NULL COMMENT '价格',
+      sort_order INT DEFAULT 0 COMMENT '排序权重',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_slug (slug),
+      INDEX idx_category (category)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='爬取礼服商品表'
+  `)
+  console.log('✓ 表 crawled_dresses 已就绪')
+}
+
+module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable }
