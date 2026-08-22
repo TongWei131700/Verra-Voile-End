@@ -208,8 +208,7 @@ async function seedProducts(pool) {
     { category_id: 'team', product_id: 'video', name: '婚礼视频', name_en: 'Wedding Film', description: '全程视频拍摄与电影级剪辑，记录每一个珍贵瞬间', image: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=600&h=400&fit=crop', price: 1000, unit: '€', capacity: '全天拍摄', highlight: '推荐', sort_order: 4 },
     // floral
     { category_id: 'floral', product_id: 'dahlia', name: '大丽花手捧花束', name_en: 'Dahlia Bouquet', description: '经典欧式手捧花设计，大丽花搭配尤加利叶，优雅大气', image: 'https://images.unsplash.com/photo-1487530811176-3780de880c2d?w=600&h=400&fit=crop', price: 500, unit: '€', capacity: '1束', highlight: '', sort_order: 1 },
-    // wine（仅保留 Nobu 定制宴会，完整富数据由 scripts/insert-nobu-catering.cjs 写入）
-    { category_id: 'wine', product_id: 'nobu-catering', name: 'Nobu 定制宴会', name_en: 'Nobu Catering London', description: 'Nobu Hotel London Portman Square 定制宴会餐饮。坐席晚宴、鸡尾酒会 canapés、现场烹饪台与主厨大师课任选，服务覆盖酒店、办公室、私人住宅，甚至游艇与私人飞机。', image: 'https://www.nobuhotels.com/london-portman/content/uploads/2024/09/Nobu_Hotel_London_Portman_Square_Nobu_Terrace_Food_Cocktails_Platter_2.jpg', price: 0, unit: '——', capacity: '定制规模', highlight: '米其林名厨', sort_order: 1 },
+    // wine（酒水宴席商品数据为空，待后续写入）
     // photography
     ...photographySeedProducts,
     // other
@@ -360,6 +359,8 @@ async function ensureWineRichColumns(pool) {
     { name: 'images', sql: "ADD COLUMN images JSON COMMENT '图片URL列表'" },
     { name: 'highlights', sql: "ADD COLUMN highlights JSON COMMENT '特色亮点列表'" },
     { name: 'source_url', sql: "ADD COLUMN source_url VARCHAR(500) DEFAULT '' COMMENT '数据来源URL'" },
+    { name: 'tags', sql: "ADD COLUMN tags JSON COMMENT '分类标签（region/type/vintage）'" },
+    { name: 'buying_options', sql: "ADD COLUMN buying_options JSON COMMENT '购买选项（Bottle/Case规格套餐）'" },
   ]
   for (const col of richColumns) {
     const [cols] = await pool.execute(`SHOW COLUMNS FROM \`products_wine\` LIKE '${col.name}'`)

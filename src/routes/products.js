@@ -428,7 +428,7 @@ router.get('/:moduleId', async (req, res) => {
     // 检测表中是否存在详情页富字段（tagline/images/highlights/source_url）
     const [colRows] = await pool.execute(`SHOW COLUMNS FROM \`${tableName}\``)
     const colNames = colRows.map(c => c.Field)
-    const richCols = ['tagline', 'images', 'highlights', 'source_url'].filter(c => colNames.includes(c))
+    const richCols = ['tagline', 'images', 'highlights', 'source_url', 'characteristics', 'reviews', 'about_images', 'overview', 'tags', 'buying_options'].filter(c => colNames.includes(c))
     const richSelect = richCols.length > 0 ? ', ' + richCols.join(', ') : ''
 
     // 从对应的独立表中查询商品
@@ -436,11 +436,17 @@ router.get('/:moduleId', async (req, res) => {
       `SELECT product_id AS productId, name, name_en AS nameEn, description, image, price, unit, capacity, highlight, sort_order${richSelect} FROM \`${tableName}\` ORDER BY sort_order ASC`
     )
 
-    // JSON 字段解析为数组
+    // JSON 字段解析为数组/对象
     const products = rawProducts.map(p => ({
       ...p,
       images: typeof p.images === 'string' && p.images ? safeJsonArr(p.images) : (Array.isArray(p.images) ? p.images : undefined),
       highlights: typeof p.highlights === 'string' && p.highlights ? safeJsonArr(p.highlights) : (Array.isArray(p.highlights) ? p.highlights : undefined),
+      characteristics: typeof p.characteristics === 'string' && p.characteristics ? safeJsonArr(p.characteristics) : (Array.isArray(p.characteristics) ? p.characteristics : undefined),
+      reviews: typeof p.reviews === 'string' && p.reviews ? safeJsonArr(p.reviews) : (Array.isArray(p.reviews) ? p.reviews : undefined),
+      aboutImages: typeof p.about_images === 'string' && p.about_images ? safeJsonArr(p.about_images) : (Array.isArray(p.about_images) ? p.about_images : undefined),
+      overview: typeof p.overview === 'string' && p.overview ? JSON.parse(p.overview) : (p.overview && typeof p.overview === 'object' ? p.overview : undefined),
+      tags: typeof p.tags === 'string' && p.tags ? JSON.parse(p.tags) : (p.tags && typeof p.tags === 'object' ? p.tags : undefined),
+      buyingOptions: typeof p.buying_options === 'string' && p.buying_options ? safeJsonArr(p.buying_options) : (Array.isArray(p.buying_options) ? p.buying_options : undefined),
       tagline: p.tagline || undefined,
       sourceUrl: p.source_url || undefined,
     }))
