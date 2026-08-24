@@ -31,7 +31,7 @@ router.use(userAuthMiddleware)
 router.get('/', async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT category_id, product_id, name, name_en, price, unit FROM user_selected_products WHERE user_id = ? ORDER BY created_at ASC',
+      'SELECT category_id, product_id, name, name_en, price, unit, image, qty, specs FROM user_selected_products WHERE user_id = ? ORDER BY created_at ASC',
       [req.userId]
     )
     res.json({ success: true, data: rows })
@@ -66,12 +66,15 @@ router.post('/sync', async (req, res) => {
         item.nameEn || '',
         item.price || 0,
         item.unit || '€',
+        item.image || '',
+        item.qty || 1,
+        item.specs || '',
       ])
-      const placeholders = values.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ')
+      const placeholders = values.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')
       const flatValues = values.flat()
 
       await pool.execute(
-        `INSERT INTO user_selected_products (user_id, category_id, product_id, name, name_en, price, unit) VALUES ${placeholders}`,
+        `INSERT INTO user_selected_products (user_id, category_id, product_id, name, name_en, price, unit, image, qty, specs) VALUES ${placeholders}`,
         flatValues
       )
     }

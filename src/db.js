@@ -67,10 +67,30 @@ async function initDB() {
       name_en VARCHAR(200) DEFAULT '' COMMENT '商品英文名',
       price INT NOT NULL DEFAULT 0 COMMENT '价格',
       unit VARCHAR(10) DEFAULT '€' COMMENT '货币单位',
+      image VARCHAR(500) DEFAULT '' COMMENT '商品图片URL',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
       UNIQUE KEY uk_user_product (user_id, category_id, product_id),
       INDEX idx_user_id (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户已选商品表';
+  `
+  const createUserWishlistSQL = `
+    CREATE TABLE IF NOT EXISTS user_wishlist (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL COMMENT '用户ID',
+      category_id VARCHAR(50) NOT NULL COMMENT '类别ID: floral/wine等',
+      product_id VARCHAR(100) NOT NULL COMMENT '花店slug/酒水productId',
+      item_name VARCHAR(200) DEFAULT '' COMMENT '商品名称',
+      item_name_en VARCHAR(200) DEFAULT '' COMMENT '商品英文名',
+      image VARCHAR(500) DEFAULT '' COMMENT '图片URL',
+      base_price INT DEFAULT 0 COMMENT '基础价格',
+      total_price INT DEFAULT 0 COMMENT '总价（含选项）',
+      unit VARCHAR(10) DEFAULT '£' COMMENT '货币单位',
+      options_json JSON COMMENT '选花/选酒明细 {idx:{name,price,qty}}',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_user_wish (user_id, category_id, product_id),
+      INDEX idx_user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户意向单明细表';
   `
   const createProductsTableSQL = `
     CREATE TABLE IF NOT EXISTS products (
@@ -123,6 +143,33 @@ async function initDB() {
   await pool.execute(createVerificationCodesSQL)
   await pool.execute(createMessagesSQL)
   await pool.execute(createUserProductsSQL)
+  await pool.execute(createUserWishlistSQL)
+  console.log('✓ 数据库表 user_wishlist 已就绪')
+    // 迁移：为 user_selected_products 表补充 image 字段（如不存在）
+    try {
+      const [cols] = await pool.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='user_selected_products' AND COLUMN_NAME='image'")
+      if (cols.length === 0) {
+        await pool.execute("ALTER TABLE user_selected_products ADD COLUMN image VARCHAR(500) DEFAULT '' COMMENT '商品图片URL' AFTER unit")
+        console.log('✓ user_selected_products 表已添加 image 字段')
+      }
+    } catch (e) {
+      console.warn('迁移 image 字段时出错（可忽略）:', e.message)
+    }
+    // 迁移：为 user_selected_products 表补充 qty / specs 字段
+    try {
+      const [cols2] = await pool.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='user_selected_products' AND COLUMN_NAME='qty'")
+      if (cols2.length === 0) {
+        await pool.execute("ALTER TABLE user_selected_products ADD COLUMN qty INT DEFAULT 1 COMMENT '数量（花卉选花数等）' AFTER image")
+        console.log('✓ user_selected_products 表已添加 qty 字段')
+      }
+      const [cols3] = await pool.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='user_selected_products' AND COLUMN_NAME='specs'")
+      if (cols3.length === 0) {
+        await pool.execute("ALTER TABLE user_selected_products ADD COLUMN specs VARCHAR(500) DEFAULT '' COMMENT '规格明细描述' AFTER qty")
+        console.log('✓ user_selected_products 表已添加 specs 字段')
+      }
+    } catch (e) {
+      console.warn('迁移 qty/specs 字段时出错（可忽略）:', e.message)
+    }
   await pool.execute(createProductModulesTableSQL)
   await pool.execute(createProductsTableSQL)
   await pool.execute(createDeployVersionsTableSQL)

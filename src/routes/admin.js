@@ -105,7 +105,7 @@ router.get('/chat-users', async (req, res) => {
 router.get('/user-products/:userId', async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT category_id, product_id, name, name_en, price, unit, created_at FROM user_selected_products WHERE user_id = ? ORDER BY created_at ASC',
+      'SELECT category_id, product_id, name, name_en, price, unit, image, created_at FROM user_selected_products WHERE user_id = ? ORDER BY created_at ASC',
       [req.params.userId]
     )
     res.json({ success: true, data: rows })
