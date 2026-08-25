@@ -521,4 +521,51 @@ router.post('/admin-login', (req, res) => {
   })
 })
 
+/**
+ * POST /api/auth/reset-password
+ * 邮箱验证码重置密码
+ */
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ success: false, message: '请填写完整信息' })
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: '密码至少6位' })
+    }
+
+    // 查找该邮箱的未过期验证码
+    const [rows] = await pool.execute(
+      "SELECT id FROM verification_codes WHERE phone = ? AND code = ? AND type = 'email' AND expires_at > NOW() AND used = 0 ORDER BY id DESC LIMIT 1",
+      [email, code]
+    )
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, message: '验证码无效或已过期' })
+    }
+
+    // 标记验证码已使用
+    await pool.execute('UPDATE verification_codes SET used = 1 WHERE id = ?', [rows[0].id])
+
+    // 查找用户（通过 email 或 phone）
+    const [users] = await pool.execute(
+      'SELECT id FROM users WHERE email = ? OR phone = ?',
+      [email, email]
+    )
+    if (users.length === 0) {
+      return res.status(404).json({ success: false, message: '该邮箱未注册' })
+    }
+
+    // 更新密码
+    const hashed = await bcrypt.hash(newPassword, 10)
+    await pool.execute('UPDATE users SET password = ? WHERE id = ?', [hashed, users[0].id])
+
+    res.json({ success: true, message: '密码重置成功' })
+  } catch (err) {
+    console.error('重置密码失败:', err)
+    res.status(500).json({ success: false, message: '重置失败，请稍后重试' })
+  }
+})
+
 module.exports = router
