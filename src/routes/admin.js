@@ -75,11 +75,12 @@ router.get('/stats', async (req, res) => {
 
 /**
  * GET /api/admin/chat-users
- * 获取有聊天记录的用戶列表（含最后一条消息和时间）
+ * 获取有聊天记录的用戶列表（含最后一条消息和时间），包括访客
  */
 router.get('/chat-users', async (req, res) => {
   try {
-    const [rows] = await pool.execute(`
+    // 注册用户的聊天记录
+    const [userRows] = await pool.execute(`
       SELECT u.id, u.phone,
         m_last.content AS last_message,
         m_last.created_at AS last_message_at,
@@ -91,7 +92,27 @@ router.get('/chat-users', async (req, res) => {
       )
       ORDER BY m_last.created_at DESC
     `)
-    res.json({ success: true, data: rows })
+
+    // 访客的聊天记录（user_id 为负数，不在 users 表中）
+    const [guestRows] = await pool.execute(`
+      SELECT m.user_id AS id,
+        CONCAT('访客_', LPAD(HEX(ABS(m.user_id)), 8, '0')) AS phone,
+        m_last.content AS last_message,
+        m_last.created_at AS last_message_at,
+        m_last.sender_type AS last_sender_type,
+        (SELECT COUNT(*) FROM messages gm WHERE gm.user_id = m.user_id AND gm.sender_type = 'user' AND gm.is_read = 0) AS unread_count
+      FROM (SELECT DISTINCT user_id FROM messages WHERE user_id < 0) m
+      INNER JOIN messages m_last ON m_last.id = (
+        SELECT m2.id FROM messages m2 WHERE m2.user_id = m.user_id ORDER BY m2.created_at DESC LIMIT 1
+      )
+      ORDER BY m_last.created_at DESC
+    `)
+
+    // 合并并按时间倒序排列
+    const all = [...userRows, ...guestRows]
+      .sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at))
+
+    res.json({ success: true, data: all })
   } catch (error) {
     console.error('查询聊天用户列表错误:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })

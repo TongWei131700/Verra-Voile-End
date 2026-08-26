@@ -522,6 +522,24 @@ router.post('/admin-login', (req, res) => {
 })
 
 /**
+ * POST /api/auth/guest-token
+ * 生成临时访客 token（1 小时有效），无需登录即可咨询客服
+ */
+router.post('/guest-token', (req, res) => {
+  const crypto = require('crypto')
+  const guestId = crypto.randomUUID()
+  const token = jwt.sign(
+    { role: 'guest', guestId },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  )
+  res.json({
+    success: true,
+    data: { token, guestId },
+  })
+})
+
+/**
  * POST /api/auth/reset-password
  * 邮箱验证码重置密码
  */

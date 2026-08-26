@@ -50,8 +50,9 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS messages (
       id INT AUTO_INCREMENT PRIMARY KEY,
       user_id INT NOT NULL COMMENT '用户ID',
-      sender_type ENUM('user', 'admin') NOT NULL DEFAULT 'user' COMMENT '发送方',
+      sender_type ENUM('user', 'admin', 'system') NOT NULL DEFAULT 'user' COMMENT '发送方',
       content TEXT NOT NULL COMMENT '消息内容',
+            channel VARCHAR(20) NOT NULL DEFAULT 'order' COMMENT '消息渠道',
       is_read TINYINT(1) DEFAULT 0 COMMENT '是否已读',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
       INDEX idx_user_id (user_id, created_at)

@@ -5,7 +5,7 @@ const { pool } = require('../db')
 const router = express.Router()
 const JWT_SECRET = process.env.JWT_SECRET || 'verra-voile-secret-key-2026'
 
-// 用户鉴权中间件
+// 用户鉴权中间件（支持登录用户和访客）
 function userAuthMiddleware(req, res, next) {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -14,8 +14,17 @@ function userAuthMiddleware(req, res, next) {
   const token = authHeader.split(' ')[1]
   try {
     const decoded = jwt.verify(token, JWT_SECRET)
-    req.userId = decoded.userId
-    req.userPhone = decoded.phone
+    if (decoded.role === 'guest') {
+      // 访客：将 guestId 确定性映射为负数 user_id（与 chat.js 保持一致）
+      const hex = decoded.guestId.replace(/-/g, '').substring(0, 8)
+      req.userId = -(parseInt(hex, 16) % 2000000000 + 1)
+      req.userPhone = `访客_${decoded.guestId.substring(0, 8)}`
+      req.isGuest = true
+    } else {
+      req.userId = decoded.userId
+      req.userPhone = decoded.phone
+      req.isGuest = false
+    }
     next()
   } catch {
     return res.status(401).json({ success: false, message: 'token已过期' })

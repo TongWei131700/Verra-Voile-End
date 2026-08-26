@@ -22,13 +22,17 @@ const transporter = nodemailer.createTransport({
 router.post('/notify-first-message', async (req, res) => {
   try {
     const { content } = req.body
-    // 从 JWT 中解析用户账号（手机登录存 phone，邮箱登录存 email）
+    // 从 JWT 中解析用户账号（手机登录存 phone，邮箱登录存 email，访客显示访客标识）
     let userAccount = ''
     const authHeader = req.headers.authorization
     if (authHeader) {
       try {
         const decoded = jwt.verify(authHeader.replace('Bearer ', ''), JWT_SECRET)
-        userAccount = decoded.phone || decoded.email || ''
+        if (decoded.role === 'guest') {
+          userAccount = `访客 (${decoded.guestId?.substring(0, 8) || ''})`
+        } else {
+          userAccount = decoded.phone || decoded.email || ''
+        }
       } catch {}
     }
 
