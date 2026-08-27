@@ -81,7 +81,7 @@ router.get('/chat-users', async (req, res) => {
   try {
     // 注册用户的聊天记录
     const [userRows] = await pool.execute(`
-      SELECT u.id, u.phone,
+      SELECT u.id, CASE WHEN u.phone <> '' THEN u.phone ELSE u.email END AS phone,
         m_last.content AS last_message,
         m_last.created_at AS last_message_at,
         m_last.sender_type AS last_sender_type,

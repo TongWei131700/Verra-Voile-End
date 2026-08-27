@@ -82,8 +82,8 @@ function initChat(httpServer) {
           if (user_id < 0) {
             userPhone = `访客_${Math.abs(user_id).toString(16).padStart(8, '0')}`
           } else {
-            const [userRows] = await pool.execute('SELECT phone FROM users WHERE id = ?', [user_id])
-            userPhone = userRows[0]?.phone || '未知'
+            const [userRows] = await pool.execute('SELECT phone, email FROM users WHERE id = ?', [user_id])
+            userPhone = (userRows[0]?.phone && userRows[0].phone.trim()) ? userRows[0].phone : (userRows[0]?.email || '未知')
           }
           socket.emit('user_chat_loaded', { user_id, user_phone: userPhone, messages })
         } catch (err) {
