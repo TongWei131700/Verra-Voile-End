@@ -120,58 +120,41 @@ expect {
 EXPECT_EOF
 ```
 
-### 7. 同步本地数据库到服务器
+### 7. 同步本地数据库到服务器（⚠️ 必选步骤，绝不可跳过！）
 
-将本地 `verra_voile` 数据库的**全量业务表**导出并导入服务器，确保线上数据与本地一致：
+**数据库同步是每次部署的强制步骤，无论用户是否提及都必须执行！**
 
-**同步范围（业务数据表，本地为主）：**
-- 爬取数据：`crawled_destinations`, `crawled_venues`
-- 国家分表（全部 cd_* 和 cv_* 表）：`cd_uk`, `cd_france`, `cd_greece`, `cd_italy`, `cd_spain`, `cd_portugal`, `cd_test_uk`, `cd_test_france`, `cd_test_greece`, `cd_test_italy`, `cd_test_spain`, `cv_uk`, `cv_france`, `cv_greece`, `cv_italy`, `cv_spain`, `cv_portugal`, `cv_test_uk`, `cv_test_france`, `cv_test_greece`, `cv_test_italy`, `cv_test_spain`
-- 商品数据：`products`, `product_modules`, `products_catering`, `products_destination`, `products_dress`, `products_floral`, `products_other`, `products_team`, `products_wine`
-- 版本/配置：`data_versions`, `deploy_versions`, `wedding_teams`
+将本地 `verra_voile` 数据库的**全量业务表**导出并导入服务器，确保线上数据与本地一致。
 
-**不同步（服务器产生的用户数据）：**
-- `users`, `reservations`, `verification_codes`, `messages`, `user_selected_products`
-- 测试/快照表：`snapshot_*`, `test_*`, `testDestination`
+**核心原则：使用动态查询获取表名，禁止硬编码！**
+
+不同步的表（服务器产生的用户数据）：`users`, `reservations`, `verification_codes`, `messages`, `user_selected_products`, `snapshot_*`, `test_*`
 
 ```bash
-# 1. 本地导出全量业务表（含表结构 + 数据）
-/usr/local/mysql/bin/mysqldump -u root verra_voile \
-  crawled_destinations crawled_venues \
-  products product_modules \
-  products_catering products_destination products_dress products_floral \
-  products_other products_team products_wine \
-  data_versions deploy_versions wedding_teams \
-  --skip-lock-tables --routines --triggers > /tmp/full_business_tables.sql
+# 1. 动态查询所有需要同步的表名（排除用户数据表）
+TABLES=$(mysql -u root verra_voile -N -B -e "
+  SELECT table_name FROM information_schema.tables 
+  WHERE table_schema='verra_voile' 
+  AND table_name NOT IN ('users','reservations','verification_codes','messages','user_selected_products')
+  AND table_name NOT LIKE 'snapshot_%'
+  AND table_name NOT LIKE 'test_%'
+  ORDER BY table_name;
+" | tr '\n' ' ')
+echo "同步表: $TABLES"
 
-# 2. 上传 SQL 到服务器
-expect << 'EXPECT_EOF'
-set timeout 60
-spawn scp -o StrictHostKeyChecking=no /tmp/full_business_tables.sql root@47.99.138.250:/tmp/
-expect {
-    "password:" {
-        send "TongWei131700\r"
-        exp_continue
-    }
-    eof
-}
-EXPECT_EOF
+# 2. 本地导出
+mysqldump -u root verra_voile $TABLES --skip-lock-tables > /tmp/full_business_tables.sql
 
-# 3. 服务器导入（全量替换业务表）
-expect << 'EXPECT_EOF'
-set timeout 60
-spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "mysql -h 127.0.0.1 -P 3306 -u root -p'TongWei131700' verra_voile < /tmp/full_business_tables.sql && echo DB_SYNC_OK"
-expect {
-    "password:" {
-        send "TongWei131700\r"
-        exp_continue
-    }
-    eof
-}
-EXPECT_EOF
+# 3. 上传 SQL 到服务器
+scp /tmp/full_business_tables.sql root@47.99.138.250:/tmp/
+
+# 4. 服务器导入
+ssh root@47.99.138.250 "mysql -u root -p'TongWei131700' verra_voile < /tmp/full_business_tables.sql && echo DB_SYNC_OK"
 ```
 
-> **注意**：此步骤会全量覆盖业务表，服务器上的爬取数据和商品数据会被本地数据完全替换。用户数据（订单、注册等）不受影响。
+**验证**：导入后对比关键表数量，如 `SELECT COUNT(*) FROM crawled_venues`，确保本地与服务器一致。
+
+> **注意**：此步骤会全量覆盖业务表。用户数据（订单、注册等）不受影响。
 
 ### 8. 验证部署
 
