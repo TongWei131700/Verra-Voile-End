@@ -1,3 +1,17 @@
 node_modules/
 .env
 uploads/
+
+# Deploy artifacts
+*.tar.gz
+backups/
+
+# One-time data scripts
+scripts/
+insert-*.cjs
+insert_venues.js
+tmp_update.js
+*.sql
+
+# Temp files
+TODO-*.md
