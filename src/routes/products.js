@@ -1,5 +1,5 @@
 const express = require('express')
-const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable } = require('../db')
+const { pool, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable, ensureCrawledTravelAttractionsTable } = require('../db')
 
 const router = express.Router()
 
@@ -400,6 +400,81 @@ router.get('/crawled-dresses/:slug', async (req, res) => {
     res.json({ success: true, data: rows[0] })
   } catch (error) {
     console.error('获取爬取礼服详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-travel-attractions
+ * 获取旅拍景点列表
+ */
+router.get('/crawled-travel-attractions', async (req, res) => {
+  try {
+    await ensureCrawledTravelAttractionsTable(pool)
+    const [rows] = await pool.execute(
+      `SELECT id, slug, name, name_en, country, country_en, location, location_en,
+              cover_image, tagline, LEFT(description, 200) AS description_preview,
+              highlights, price, sort_order, tags, created_at
+       FROM crawled_travel_attractions ORDER BY sort_order ASC`
+    )
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('获取旅拍景点列表失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-travel-attractions/:slug
+ * 获取单个旅拍景点详情
+ */
+router.get('/crawled-travel-attractions/:slug', async (req, res) => {
+  try {
+    await ensureCrawledTravelAttractionsTable(pool)
+    const [rows] = await pool.execute(
+      'SELECT * FROM crawled_travel_attractions WHERE slug = ? LIMIT 1',
+      [req.params.slug]
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '景点不存在' })
+    }
+    res.json({ success: true, data: rows[0] })
+  } catch (error) {
+    console.error('获取旅拍景点详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/products/crawled-travel-attractions/:slug/photographers
+ * 获取该景点的推荐摄影师（按国家动态随机查询 3 位）
+ */
+router.get('/crawled-travel-attractions/:slug/photographers', async (req, res) => {
+  try {
+    await ensureCrawledTravelAttractionsTable(pool)
+    // 查景点的国家
+    const [attractions] = await pool.execute(
+      'SELECT country_en FROM crawled_travel_attractions WHERE slug = ? LIMIT 1',
+      [req.params.slug]
+    )
+    if (attractions.length === 0) {
+      return res.status(404).json({ success: false, message: '景点不存在' })
+    }
+    const { country_en: countryEn } = attractions[0]
+
+    // 动态随机查询该国家的 3 位摄影师（优先有头像的）
+    const [rows] = await pool.execute(
+      `SELECT slug, name, name_cn, headshot, cover_image, tagline, photo_styles, price
+       FROM crawled_photographers
+       WHERE country_en = ?
+       ORDER BY CASE WHEN headshot IS NOT NULL AND headshot != '' THEN 0 ELSE 1 END, RAND()
+       LIMIT 3`,
+      [countryEn]
+    )
+
+    res.json({ success: true, data: rows, country: countryEn })
+  } catch (error) {
+    console.error('获取推荐摄影师失败:', error)
     res.status(500).json({ success: false, message: '服务器内部错误' })
   }
 })

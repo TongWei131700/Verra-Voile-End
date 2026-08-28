@@ -203,6 +203,10 @@ async function initDB() {
   // 爬取礼服商品表
   await ensureCrawledDressesTable(pool)
 
+  // 旅拍景点表
+  await ensureCrawledTravelAttractionsTable(pool)
+  await seedTravelAttractions(pool)
+
   // 目的地场地表（含城市分组字段）
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
@@ -710,4 +714,83 @@ async function ensureCrawledDressesTable(pool) {
   console.log('✓ 表 crawled_dresses 已就绪')
 }
 
-module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable }
+/**
+ * 创建旅拍景点表
+ */
+async function ensureCrawledTravelAttractionsTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS crawled_travel_attractions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(150) NOT NULL COMMENT 'URL标识',
+      name VARCHAR(200) NOT NULL COMMENT '中文名',
+      name_en VARCHAR(200) DEFAULT '' COMMENT '英文名',
+      country VARCHAR(100) DEFAULT '' COMMENT '国家中文',
+      country_en VARCHAR(100) DEFAULT '' COMMENT '国家英文',
+      location VARCHAR(100) DEFAULT '' COMMENT '城市中文',
+      location_en VARCHAR(100) DEFAULT '' COMMENT '城市英文',
+      cover_image VARCHAR(500) DEFAULT '' COMMENT '封面图URL',
+      tagline VARCHAR(500) DEFAULT '' COMMENT '宣传语',
+      description TEXT COMMENT '景点介绍',
+      description_en TEXT COMMENT '景点介绍英文',
+      highlights JSON COMMENT '亮点标签',
+      price INT DEFAULT 0 COMMENT '起步价（欧元）',
+      sort_order INT DEFAULT 0 COMMENT '排序权重',
+      tags JSON COMMENT '标签分类',
+      recommended_photographers JSON COMMENT 'SEO固定推荐摄影师slug列表',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_slug (slug),
+      INDEX idx_country (country)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅拍景点表'
+  `)
+  // 兼容旧表：添加 recommended_photographers 字段
+  try {
+    await pool.execute(`ALTER TABLE crawled_travel_attractions ADD COLUMN recommended_photographers JSON COMMENT 'SEO固定推荐摄影师slug列表'`)
+    console.log('✓ 已添加 recommended_photographers 字段')
+  } catch (e) {
+    if (e.code !== 'ER_DUP_FIELDNAME') console.log('⚠ recommended_photographers 字段已存在或跳过')
+  }
+  // 兼容旧表：添加 photo_tips 字段
+  try {
+    await pool.execute(`ALTER TABLE crawled_travel_attractions ADD COLUMN photo_tips TEXT COMMENT '拍摄建议'`)
+    console.log('✓ 已添加 photo_tips 字段')
+  } catch (e) {
+    if (e.code !== 'ER_DUP_FIELDNAME') console.log('⚠ photo_tips 字段已存在或跳过')
+  }
+  console.log('✓ 表 crawled_travel_attractions 已就绪')
+}
+
+/**
+ * 种子数据：旅拍景点
+ */
+async function seedTravelAttractions(pool) {
+  const [rows] = await pool.execute('SELECT COUNT(*) as cnt FROM crawled_travel_attractions')
+  if (rows[0].cnt > 0) return
+
+  const attractions = [
+    { slug: 'eiffel-tower', name: '埃菲尔铁塔', name_en: 'Eiffel Tower', country: '法国', country_en: 'France', location: '巴黎', location_en: 'Paris', cover_image: 'https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=1200&fit=crop', tagline: '巴黎地标，浪漫之都的象征', description: '埃菲尔铁塔矗立在塞纳河南岸的战神广场上，是法国巴黎最具标志性的建筑。这座铁塔由工程师居斯塔夫·埃菲尔设计，于1889年世界博览会期间落成，至今已矗立超过一百三十年，见证了无数历史时刻。铁塔高324米，由18038件锻铁构件和250万颗铆钉组装而成，其精密的结构本身就是工程美学的巅峰之作。\n\n对于欧洲旅拍而言，埃菲尔铁塔提供了无与伦比的拍摄体验。清晨时分，铁塔在柔和的晨光中呈现出温暖的金色调，战神广场几乎空无一人，是拍摄私密合影的绝佳时机。黄昏时分，铁塔在夕阳余晖中剪影般矗立，入夜后每整点的灯光闪烁更为画面增添浪漫氛围。特罗卡德罗广场的宽阔平台可以完整收纳铁塔全貌，是拍摄大场景的经典机位；而铁塔脚下的仰拍角度则能营造出宏伟壮观的视觉冲击力。', description_en: 'The Eiffel Tower stands on the Champ de Mars in Paris, France. Designed by engineer Gustave Eiffel, it was constructed for the 1889 World\'s Fair and has become one of the most visited paid tourist attractions in the world.', highlights: JSON.stringify([{ icon: '🗼', title: '建筑高度', desc: '324米，巴黎最高建筑' }, { icon: '📸', title: '最佳拍摄', desc: '日落时分，铁塔亮灯瞬间' }, { icon: '🌅', title: '推荐时段', desc: '4月-9月，光线柔和温暖' }, { icon: '👗', title: '推荐风格', desc: '浪漫法式、复古胶片、时尚杂志' }]), price: 0, sort_order: 1, tags: JSON.stringify(['城市地标', '铁塔', '夜景', '浪漫法式']) },
+    { slug: 'louvre-museum', name: '卢浮宫', name_en: 'Louvre Museum', country: '法国', country_en: 'France', location: '巴黎', location_en: 'Paris', cover_image: 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=1200&fit=crop', tagline: '世界最大艺术博物馆，蒙娜丽莎的故乡', description: '卢浮宫位于巴黎市中心塞纳河北岸，是世界上最大、最著名的艺术博物馆之一。这座昔日的法国王宫始建于12世纪，经过数百年的扩建与修缮，汇集了从中世纪到文艺复兴时期的建筑精华。贝聿铭设计的玻璃金字塔入口于1989年落成，以简洁的几何造型与古典宫殿形成鲜明对话，本身已成为巴黎的新地标。\n\n卢浮宫收藏了从古代文明到19世纪的数十万件艺术珍品，其中包括蒙娜丽莎、断臂维纳斯和胜利女神等旷世杰作。对于旅拍而言，卢浮宫的魅力在于多层次的空间体验：玻璃金字塔的反射面在不同光线下呈现变幻莫测的色彩，卡鲁塞尔花园的对称花坛提供了优雅的取景框架，而塞纳河沿岸的远眺则将整座宫殿的恢弘天际线尽收眼底。', description_en: 'The Louvre Museum is located on the Right Bank of the Seine in Paris. It is the world\'s largest and most visited art museum, housing thousands of works of art from antiquity to the 19th century.', highlights: JSON.stringify([]), price: 0, sort_order: 2, tags: JSON.stringify(['博物馆', '宫殿', '城市地标', '艺术']) },
+    { slug: 'provence-lavender', name: '普罗旺斯薰衣草田', name_en: 'Provence Lavender Fields', country: '法国', country_en: 'France', location: '普罗旺斯', location_en: 'Provence', cover_image: 'https://images.unsplash.com/photo-1499002238440-d264edd596ec?w=1200&fit=crop', tagline: '紫色花海中的法式浪漫', description: '普罗旺斯的薰衣草花田是法国南部最具代表性的自然景观之一。每年6月中旬至8月初，瓦朗索尔高原和索尔格地区的薰衣草竞相绽放，紫色的花海绵延起伏，与金色的麦田、翠绿的橄榄园交织成一幅印象派油画。空气中弥漫着薰衣草的芬芳，蜂蝶在花间穿梭，构成了一幅充满感官享受的南法田园画卷。\n\n这里是欧洲旅拍的梦幻之地。广阔的薰衣草田提供了天然的紫色背景，无需任何人工布景便能营造出浪漫至极的画面。日出前后和日落前后的金色光线穿透花穗，为照片增添温暖的光晕。建议穿着轻盈飘逸的白色或浅色系礼服，与紫色花海形成优雅的色彩对比。索尔格的周一集市也是拍摄法式乡村生活气息的好素材。', description_en: 'The lavender fields of Provence are one of the most iconic landscapes in southern France, with purple blooms stretching across rolling hills from June to August.', highlights: JSON.stringify([]), price: 0, sort_order: 3, tags: JSON.stringify(['田园', '花海', '乡村', '自然']) },
+    { slug: 'mont-saint-michel', name: '圣米歇尔山', name_en: 'Mont Saint-Michel', country: '法国', country_en: 'France', location: '诺曼底', location_en: 'Normandy', cover_image: '/uploads/crawled/travel-attractions/mont-saint-michel.jpg', tagline: '海上孤岛的中世纪修道院', description: '圣米歇尔山是法国诺曼底海岸外的一座潮汐岛，被誉为"西方奇迹"。山顶的本笃会修道院始建于公元8世纪，历经数百年扩建，层层叠叠的哥特式建筑群直插云霄，远处望去宛如一座海上的天空之城。作为世界文化遗产，这里每年吸引数百万游客前来朝圣。\n\n潮汐岛周围的海湾拥有欧洲最大的潮差之一，涨潮时海水环绕孤岛，退潮时露出广袤的沙滩和泥滩，一日之间景色变幻无穷。岛上的石板街道蜿蜒而上，沿途经过手工艺品店、小餐馆和古老的城墙，每一步都能发现不同的取景角度。\n\n从对岸堤坝远眺，整座山在晨雾中若隐若现，宛如仙境。我们推荐在日出或日落时分拍摄，金色的光线洒在修道院的尖塔上，配合潮汐的壮美背景，能呈现出最具戏剧性的画面。', description_en: 'Mont Saint-Michel is a tidal island off the coast of Normandy, France. The Benedictine monastery at its summit dates back to the 8th century, a masterpiece of medieval architecture.', highlights: JSON.stringify([]), price: 0, sort_order: 4, tags: JSON.stringify(['海岛', '古堡', '世界遗产', '日出日落']) },
+    { slug: 'hallstatt', name: '哈尔施塔特', name_en: 'Hallstatt', country: '奥地利', country_en: 'Austria', location: '哈尔施塔特', location_en: 'Hallstatt', cover_image: '/uploads/crawled/travel-attractions/hallstatt.jpg', tagline: '阿尔卑斯山畔的童话小镇', description: '哈尔施塔特是奥地利萨尔茨卡默古特地区的一座湖畔小镇，背靠阿尔卑斯山脉，面朝碧绿的哈尔施塔特湖，被誉为"世界最美小镇"。这座有着7000年历史的小镇以其色彩斑斓的木屋、陡峭的山峰和如镜面般的湖水闻名于世，是联合国教科文组织世界文化遗产。\n\n小镇沿湖岸排列着精心维护的木质房屋，远处雪山矗立，宛如一幅流动的油画。镇上的集市广场虽小，却有着标志性的三位一体瘟疫柱和别致的喷泉，是取景的绝佳点缀。\n\n湖畔栈道可以拍摄小镇全景与湖面倒影，乘船到湖心角度更能收纳完整的山、湖、村三层画面。清晨薄雾笼罩湖面时最为梦幻，秋冬雪后更是银装素裹的童话世界。盐矿观景台则是俯瞰全镇的制高点，能将整个哈尔施塔特湖尽收眼底。', description_en: 'Hallstatt is a charming lakeside town in Upper Austria, nestled against the Alps and facing the emerald-green Hallstatt Lake. Known as one of the most beautiful towns in the world, it offers breathtaking scenery for wedding photography.', highlights: JSON.stringify([]), price: 0, sort_order: 5, tags: JSON.stringify(['湖畔', '山脉', '世界遗产', '童话小镇']) },
+    { slug: 'venice', name: '威尼斯水城', name_en: 'Venice', country: '意大利', country_en: 'Italy', location: '威尼斯', location_en: 'Venice', cover_image: 'https://images.unsplash.com/photo-1514890547357-a9ee288728e0?w=1200&fit=crop', tagline: '水上城市的浪漫与诗意', description: '威尼斯是意大利东北部著名的水上城市，由118个小岛组成，177条运河纵横其间，以400余座桥梁相连。这座独特的城市没有汽车，运河就是街道，贡多拉就是出租车。圣马可广场上的拜占庭式大教堂和总督宫见证了威尼斯共和国千年的辉煌历史，而蜿蜒的水巷两侧，哥特式宫殿的精美倒影在水波中轻轻摇曳。\n\n威尼斯是全世界最浪漫的旅拍目的地之一。清晨的运河笼罩在薄雾中，贡多拉静静停泊在码头旁，整座城市仿佛还在沉睡——这是拍摄空灵画面的最佳时刻。乘坐贡多拉穿行于小桥之下，每一转弯都是一幅画。里亚尔托桥附近的宽阔水道可以拍摄到两岸宫殿的完整倒影。黄昏时分，圣马可广场在落日余晖中呈现出温暖的琥珀色调，乐队的演奏声为画面增添了动人的背景。', description_en: 'Venice is a city in northeastern Italy built on 118 small islands connected by canals and bridges. Known for its unique urban landscape, gondolas, and rich artistic heritage.', highlights: JSON.stringify([]), price: 0, sort_order: 5, tags: JSON.stringify(['水城', '运河', '浪漫', '历史']) },
+    { slug: 'florence-cathedral', name: '佛罗伦萨大教堂', name_en: 'Florence Cathedral', country: '意大利', country_en: 'Italy', location: '佛罗伦萨', location_en: 'Florence', cover_image: 'https://images.unsplash.com/photo-1543429258-f4e4837a0e3e?w=1200&fit=crop', tagline: '文艺复兴的发源地', description: '佛罗伦萨大教堂是文艺复兴建筑的巅峰之作。其标志性的红色穹顶由菲利波·布鲁内莱斯基设计，直径达45米，在没有现代工程设备的15世纪便已完工，至今仍是佛罗伦萨天际线最醒目的地标。教堂外立面以粉、绿、白三色大理石拼贴出精美的几何图案，乔托钟楼矗立一旁，高达84米，可登顶俯瞰整座城市的红瓦屋顶。\n\n佛罗伦萨是文艺复兴的摇篮，整座城市就是一座露天博物馆。对于旅拍而言，大教堂广场提供了最经典的取景角度——穹顶的宏伟弧线在广场上方展开，营造出震撼的视觉效果。阿诺河上的老桥两侧是传统金匠铺，桥上建筑的独特轮廓是绝佳的背景。米开朗基罗广场的山坡上可以拍摄到包含穹顶在内的城市全景，日落时分金色的光线洒满红瓦屋顶，画面温暖而壮丽。', description_en: 'Florence Cathedral, with its iconic red dome designed by Brunelleschi, is a masterpiece of Renaissance architecture and the most recognizable landmark of the Florence skyline.', highlights: JSON.stringify([]), price: 0, sort_order: 6, tags: JSON.stringify(['教堂', '穹顶', '文艺复兴', '城市地标']) },
+    { slug: 'amalfi-coast', name: '阿马尔菲海岸', name_en: 'Amalfi Coast', country: '意大利', country_en: 'Italy', location: '坎帕尼亚', location_en: 'Campania', cover_image: 'https://images.unsplash.com/photo-1534308983496-4fabb1a015ee?w=1200&fit=crop', tagline: '地中海最迷人的海岸线', description: '阿马尔菲海岸位于意大利南部坎帕尼亚大区，绵延约50公里的悬崖海岸线上点缀着色彩斑斓的小镇、层叠的柠檬花园和碧蓝的第勒尼安海水。从波西塔诺的粉色与赤陶色房屋悬崖直落入海，到拉韦洛的空中花园俯瞰全景，每一个转弯都是一张明信片。这条海岸公路被誉为世界上最美的驾车路线之一，蜿蜒于峭壁与碧海之间。\n\n阿马尔菲海岸是欧洲旅拍的梦幻目的地。波西塔诺的阶梯小巷和鲜花阳台提供了充满南意风情的取景场景，从海滩仰望悬崖上层层叠叠的彩色房屋，画面极具戏剧性。拉韦洛的辛波内别墅和鲁福洛花园拥有海岸线上最壮观的观景平台，可以拍摄到无限延伸的海天一色。阿马尔菲大教堂的阿拉伯-诺曼风格立面和9世纪阶梯也是不可错过的拍摄点。', description_en: 'The Amalfi Coast stretches along 50 kilometers of cliffside coastline in southern Italy, dotted with colorful villages, lemon gardens, and azure waters.', highlights: JSON.stringify([]), price: 0, sort_order: 7, tags: JSON.stringify(['海岸', '悬崖', '海景', '田园']) },
+    { slug: 'tuscany-countryside', name: '托斯卡纳田园', name_en: 'Tuscany Countryside', country: '意大利', country_en: 'Italy', location: '托斯卡纳', location_en: 'Tuscany', cover_image: 'https://images.unsplash.com/photo-1523531294919-4bcd7c65e216?w=1200&fit=crop', tagline: '金色阳光下的橄榄园与葡萄藤', description: '托斯卡纳的田园风光是意大利最具诗意的自然景观之一。起伏的丘陵上遍布橄榄园、葡萄园和古老的石砌农庄，丝柏树如哨兵般排列在蜿蜒的小路两旁，构成了一幅永恒的田园画卷。从基安蒂的葡萄园到瓦尔多尔恰的金色麦浪，从圣吉米尼亚诺的中世纪塔楼到皮恩扎的理想城市，每一处都散发着文艺复兴以来未曾改变的宁静与优雅。\n\n这里是追求自然与人文完美融合的旅拍首选。清晨的薄雾笼罩在丘陵之间，阳光透过丝柏树洒下斑驳光影，营造出梦幻般的氛围。葡萄园在秋季转为金黄与深红，色彩层次丰富。一座孤零零的石砌农庄矗立在山顶，四周是无尽的田园——这就是托斯卡纳最经典的画面。圣吉米尼亚诺的中世纪塔楼群在天际线上勾勒出独特的轮廓，为画面增添了历史的厚重感。', description_en: 'The Tuscan countryside is one of Italy\'s most poetic landscapes, with rolling hills covered in olive groves, vineyards, and ancient stone farmhouses.', highlights: JSON.stringify([]), price: 0, sort_order: 8, tags: JSON.stringify(['田园', '葡萄园', '乡村', '金色']) },
+    { slug: 'kirkjufell', name: '教堂山', name_en: 'Kirkjufell', country: '冰岛', country_en: 'Iceland', location: '斯奈山半岛', location_en: 'Snæfellsnes', cover_image: '/uploads/crawled/travel-attractions/kirkjufell.jpg', tagline: '冰岛最上镜的箭头形山峰', description: '教堂山是冰岛斯奈山半岛上最具标志性的山峰，因其独特的箭头形轮廓而得名。这座海拔463米的山峰矗立在格陵兰海畔，四周环绕着广袤的苔藓熔岩原，远处可眺望冰川与峡湾。无论春夏秋冬，教堂山都呈现出令人屏息的壮美景色，是冰岛出镜率最高的自然景观。\n\n这里是拍摄极光的绝佳地点。每年9月至次年3月，北极光在山峰上空舞动，绿色、紫色的光带与雪山交相辉映，构成一幅超现实的画面。夏季午夜阳光下的教堂山则笼罩在金色暖光中，别有一番韵味。山前的瀑布虽小，却为构图增添了层次感。\n\n从雷克雅未克出发约两小时车程即可到达，是冰岛西部最不可错过的旅拍目的地。', description_en: 'Kirkjufell is the most iconic mountain on the Snæfellsnes peninsula, known for its distinctive arrowhead shape.', highlights: JSON.stringify([]), price: 0, sort_order: 10, tags: JSON.stringify(['山峰', '极光', '地标', '雪山']) },
+    { slug: 'jokulsarlon', name: '冰河湖', name_en: 'Jökulsárlón', country: '冰岛', country_en: 'Iceland', location: '瓦特纳冰川', location_en: 'Vatnajökull', cover_image: '/uploads/crawled/travel-attractions/jokulsarlon.jpg', tagline: '漂浮着千年冰块的冰川泻湖', description: '冰河湖是冰岛东南部瓦特纳冰川国家公园内的冰川泻湖，也是冰岛最深的湖泊之一。巨大的冰块从冰川前沿断裂后漂浮在湖面上，呈现出晶莹剔透的蓝色与白色，宛如散落在镜面上的宝石。远处的冰川舌在阳光照耀下闪烁着幽蓝的光芒，场面震撼人心。\n\n冰河湖对面的钻石沙滩同样令人惊叹——被海浪冲上岸的冰块散落在乌黑的火山沙滩上，在阳光下折射出钻石般的光芒。这里是冰岛最具超现实感的旅拍场景之一，每一帧都如同来自另一个星球。\n\n乘船穿行于冰块之间，或站在湖畔远眺冰川，都能获得绝佳的拍摄角度。冬季湖面结冰时更可直接走上冰面，近距离拍摄冰层内部的蓝色纹理。', description_en: 'Jökulsárlón is a glacial lagoon in Vatnajökull National Park, where massive icebergs calved from the glacier float on the still water.', highlights: JSON.stringify([]), price: 0, sort_order: 11, tags: JSON.stringify(['冰川', '湖泊', '自然', '钻石沙滩']) },
+    { slug: 'skogafoss', name: '斯科加瀑布', name_en: 'Skógafoss', country: '冰岛', country_en: 'Iceland', location: '南部海岸', location_en: 'South Coast', cover_image: '/uploads/crawled/travel-attractions/skogafoss.jpg', tagline: '60米高的壮丽冰川瀑布', description: '斯科加瀑布是冰岛南部海岸最壮观的瀑布之一，落差达60米，宽25米，是冰岛最大的瀑布之一。瀑布从古老的冰川悬崖顶端倾泻而下，水雾弥漫，阳光照射时常常出现一道甚至双道彩虹横跨瀑布上方，场面极为壮观。\n\n瀑布两侧是陡峭的峡谷崖壁，底部有完善的步道系统，可以从多个角度拍摄。沿瀑布旁的阶梯攀登至顶部，可以俯瞰整个南部海岸线和冰川源头，视野开阔。瀑布下方的观景平台是拍摄全景的最佳位置，水雾扑面的感受更增添了身临其境的震撼。\n\n从雷克雅未克沿一号环岛公路约两小时即可到达，交通便利，是冰岛南部最热门的旅拍打卡地。', description_en: 'Skógafoss is one of the most spectacular waterfalls in Iceland, with a drop of 60 meters and width of 25 meters.', highlights: JSON.stringify([]), price: 0, sort_order: 12, tags: JSON.stringify(['瀑布', '自然', '彩虹', '徒步']) },
+    { slug: 'reynisfjara', name: '黑沙滩', name_en: 'Reynisfjara', country: '冰岛', country_en: 'Iceland', location: '维克镇', location_en: 'Vík', cover_image: '/uploads/crawled/travel-attractions/reynisfjara.jpg', tagline: '玄武岩柱与黑色沙滩的异域奇观', description: '黑沙滩位于冰岛南部维克镇附近，是世界上最独特的海滩之一。乌黑发亮的火山砂铺满海岸，大西洋的巨浪不断拍打着岸边，溅起白色的浪花。海岸边矗立着整齐的六角形玄武岩柱群，如同大自然雕刻的管风琴，气势恢宏。\n\n海面上矗立的雷尼斯德兰格海蚀柱是黑沙滩的标志性景观——三根巨大的玄武岩柱从海中拔起，形态各异，在云雾缭绕中宛如远古巨人的剪影。这里是拍摄戏剧性海景和地质奇观的绝佳场所。\n\n需要注意的是，黑沙滩的浪涌极为凶猛，游客必须与海浪保持安全距离。拍摄时建议站在高处俯瞰全景，或走近玄武岩柱群拍摄细节纹理，两种视角都能呈现令人惊叹的画面。', description_en: 'Reynisfjara is a world-famous black sand beach near Vík, Iceland, known for its dramatic basalt column formations and powerful Atlantic waves.', highlights: JSON.stringify([]), price: 0, sort_order: 13, tags: JSON.stringify(['海滩', '玄武岩', '火山', '海蚀柱']) },
+    { slug: 'landmannalaugar', name: '兰德曼纳劳卡', name_en: 'Landmannalaugar', country: '冰岛', country_en: 'Iceland', location: '高地', location_en: 'Highlands', cover_image: '/uploads/crawled/travel-attractions/landmannalaugar.jpg', tagline: '彩色流纹岩山脉与天然温泉', description: '兰德曼纳劳卡位于冰岛内陆高地，是世界上最色彩斑斓的自然景观之一。这里的流纹岩山脉呈现出令人难以置信的色调——赭红、橙黄、翠绿、灰蓝，如同一块巨大的调色盘铺展在大地上。冰川融水形成的溪流蜿蜒于彩色山谷之间，夏季绿草如茵，与远处的冰川相映成趣。\n\n这里是冰岛最著名的徒步目的地之一，著名的Laugavegur徒步路线便从这里出发。沿途可以拍摄到火山口、熔岩原、间歇泉和天然温泉池等多种地貌。山脚下的天然温泉是徒步后放松的绝佳去处，在热气氤氲中远眺彩色山脉，别有一番体验。\n\n由于地处高地，每年仅在6月至9月间可通过四驱车抵达。航拍视角下的兰德曼纳劳卡尤为壮观，色彩层次和地形纹理在高空一览无余。', description_en: 'Landmannalaugar is a stunning area in the Icelandic Highlands known for its colorful rhyolite mountains and natural hot springs.', highlights: JSON.stringify([]), price: 0, sort_order: 14, tags: JSON.stringify(['山脉', '温泉', '徒步', '彩色地貌']) },
+  ]
+
+  for (const a of attractions) {
+    await pool.execute(
+      `INSERT INTO crawled_travel_attractions (slug, name, name_en, country, country_en, location, location_en, cover_image, tagline, description, description_en, highlights, price, sort_order, tags)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [a.slug, a.name, a.name_en, a.country, a.country_en, a.location, a.location_en, a.cover_image, a.tagline, a.description, a.description_en, a.highlights, a.price, a.sort_order, a.tags]
+    )
+  }
+  console.log(`✓ 已插入 ${attractions.length} 条旅拍景点种子数据`)
+}
+
+module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable, ensureCrawledTravelAttractionsTable, seedTravelAttractions }
