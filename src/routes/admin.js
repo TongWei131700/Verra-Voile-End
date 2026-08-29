@@ -346,4 +346,53 @@ router.delete('/product-modules/:id', async (req, res) => {
   }
 })
 
+/**
+ * GET /api/admin/agent-sessions
+ * 获取 AI 助手的会话列表（按用户分组）
+ */
+router.get('/agent-sessions', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(`
+      SELECT 
+        user_token,
+        COUNT(*) as message_count,
+        MAX(created_at) as last_message_at,
+        MIN(created_at) as first_message_at
+      FROM agent_conversations
+      GROUP BY user_token
+      ORDER BY last_message_at DESC
+    `)
+    res.json({ success: true, data: rows })
+  } catch (error) {
+    console.error('查询 AI 会话列表失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
+/**
+ * GET /api/admin/agent-messages/:userToken
+ * 获取指定用户的 AI 对话详情
+ */
+router.get('/agent-messages/:userToken', async (req, res) => {
+  try {
+    const { userToken } = req.params
+    const [rows] = await pool.execute(
+      `SELECT id, session_id, user_message, ai_reply, thinking_steps, created_at 
+       FROM agent_conversations 
+       WHERE user_token = ? 
+       ORDER BY created_at ASC`,
+      [userToken]
+    )
+    // 解析 thinking_steps JSON
+    const data = rows.map(r => ({
+      ...r,
+      thinking_steps: r.thinking_steps ? (typeof r.thinking_steps === 'string' ? JSON.parse(r.thinking_steps) : r.thinking_steps) : []
+    }))
+    res.json({ success: true, data })
+  } catch (error) {
+    console.error('查询 AI 对话详情失败:', error)
+    res.status(500).json({ success: false, message: '服务器内部错误' })
+  }
+})
+
 module.exports = router
