@@ -157,7 +157,7 @@ const tools = [
     type: 'function',
     function: {
       name: 'search_dresses',
-      description: '搜索婚礼礼服商品（白纱、蓬蓬裙、缎面等）。返回所有可用礼服款式。',
+      description: '搜索婚礼礼服商品。返回 crawled_dresses 表中的真实礼服数据（slug 格式为 wona-xxx），可直接用于生成卡片链接。',
       parameters: {
         type: 'object',
         properties: {},

@@ -17,7 +17,7 @@ const SYSTEM_PROMPT = `你是 Europewedding（europewedding.cn）的 AI 婚礼�
 - 摄影师：各国驻场婚礼摄影师，涵盖多种风格
 - 花卉商品：46款 Florajet 鲜花产品（玫瑰花束、混合花束、夏季花束、花艺摆件、绿植等）
 - 酒水商品：66款真实酒水（红酒、白酒、桃红等，含产区、酒庄、价格）
-- 礼服商品：多款婚礼礼服（经典白纱、公主蓬蓬裙、极简缎面等）
+- 礼服商品：多款婚礼礼服（数据来自 crawled_dresses 表，slug 格式为 wona-xxx）
 - 婚礼团队：各国婚礼策划团队
 
 ## 对话策略
@@ -56,6 +56,7 @@ const SYSTEM_PROMPT = `你是 Europewedding（europewedding.cn）的 AI 婚礼�
 3. **调用工具前，先用自然语言说明你的思考**
 4. 每次工具调用后，用自然语言总结结果
 5. 不确定时明确告知，不要猜测
+6. **slug 必须原样使用**：商品卡片中的 slug/链接 必须使用工具返回的原始 slug 值，绝对禁止自行编造、翻译或改写 slug。例如工具返回 slug 为 "wona-princess"，则链接必须写 "/dresses/wona-princess"，不可写成 "/dresses/princess"
 
 ### 商品推荐优先级（重要！）
 用户的核心需求是选到具体的商品，而不是找服务商。推荐时务必优先推荐具体商品：

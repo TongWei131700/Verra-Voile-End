@@ -234,24 +234,28 @@ async function searchWines(args) {
 }
 
 /**
- * 搜索礼服商品
+ * 搜索礼服商品（从 crawled_dresses 表获取，与前端列表页/详情页数据一致）
  */
 async function searchDresses() {
   const [rows] = await pool.execute(
-    `SELECT product_id, name, name_en, description, image, price, unit, highlight
-     FROM products_dress
-     ORDER BY sort_order ASC`
+    `SELECT slug, name, name_en, category_cn, tagline,
+            LEFT(description, 200) AS description,
+            cover_image, price, highlights
+     FROM crawled_dresses
+     ORDER BY sort_order ASC
+     LIMIT 10`
   )
 
   return rows.map(r => ({
-    slug: r.product_id,
+    slug: r.slug,
     name: r.name,
     nameEn: r.name_en,
+    category: r.category_cn || '',
+    tagline: r.tagline || '',
     price: r.price,
-    unit: r.unit || '€',
-    coverImage: r.image || '',
+    unit: '€',
+    coverImage: r.cover_image || '',
     description: r.description ? r.description.substring(0, 150) : '',
-    highlight: r.highlight || '',
   }))
 }
 

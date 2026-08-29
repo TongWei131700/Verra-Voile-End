@@ -10,10 +10,10 @@ const { executeTool } = require('./tool-executor')
 
 const client = new OpenAI({
   apiKey: process.env.DASHSCOPE_API_KEY,
-  baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  baseURL: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
 })
 
-const MODEL = 'qwen-plus'
+const MODEL = 'qwen3.7-plus'
 const MAX_TOOL_ROUNDS = 8
 
 /**
