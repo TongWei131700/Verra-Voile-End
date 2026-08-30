@@ -151,6 +151,11 @@ async function runAgent(userMessage, conversationHistory = [], onEvent = null) {
       const result = await executeTool(toolName, args)
       console.log(`[Agent] 工具返回: ${JSON.stringify(result).substring(0, 200)}...`)
 
+      // 检测方案摘要工具 → 推送结构化数据给前端
+      if (result && result._type === 'plan_summary') {
+        emit({ type: 'plan_summary', items: result.items })
+      }
+
       messages.push({
         role: 'tool',
         tool_call_id: toolCall.id,

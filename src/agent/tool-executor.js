@@ -3,6 +3,16 @@
  * 将 LLM 的工具调用映射到实际数据库查询
  */
 const { pool } = require('../db')
+const OpenAI = require('openai')
+const fs = require('fs')
+const path = require('path')
+
+// 视觉模型客户端（复用 Token Plan endpoint + qwen3.7-plus 的视觉理解能力）
+const visionClient = new OpenAI({
+  apiKey: process.env.DASHSCOPE_API_KEY,
+  baseURL: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+})
+const VISION_MODEL = 'qwen3.7-plus'
 
 async function executeTool(name, args) {
   switch (name) {
@@ -18,6 +28,10 @@ async function executeTool(name, args) {
       return searchWines(args)
     case 'search_dresses':
       return searchDresses(args)
+    case 'analyze_wedding_visuals':
+      return analyzeVisuals(args)
+    case 'generate_plan_summary':
+      return generatePlanSummary(args)
     case 'calculate_budget':
       return calculateBudget(args)
     default:
@@ -260,6 +274,81 @@ async function searchDresses() {
 }
 
 /**
+ * 分析婚礼视频/图片的视觉要素
+ * 读取关键帧图片，调用视觉模型提取结构化婚礼标签
+ */
+async function analyzeVisuals(args) {
+  const videoId = args.video_id
+  const framesDir = path.join(__dirname, '../../uploads/tmp', videoId, 'frames')
+
+  if (!fs.existsSync(framesDir)) {
+    return { error: '关键帧不存在或已过期，请让用户重新上传' }
+  }
+
+  const frameFiles = fs.readdirSync(framesDir)
+    .filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f))
+    .sort()
+
+  if (frameFiles.length === 0) {
+    return { error: '未找到可分析的图片帧' }
+  }
+
+  // 构建多图消息内容
+  const content = [
+    {
+      type: 'text',
+      text: `请仔细分析这些婚礼相关图片，提取以下视觉要素并以严格 JSON 格式返回（不要包含任何其他文字，只返回 JSON）：
+{
+  "venue_style": "场地类型（城堡/花园/海滩/教堂/庄园/酒店/户外草坪/室内宴会厅）",
+  "setting": "室内/室外/半室外",
+  "color_palette": ["主色调1", "主色调2", "主色调3"],
+  "flower_style": "花艺风格（自然田园/经典圆形/瀑布型/极简/奢华）",
+  "flower_types": ["可见花材1", "可见花材2"],
+  "dress_style": "婚纱款式（A字/鱼尾/蓬蓬裙/短款/修身）",
+  "dress_detail": "婚纱细节（蕾丝/缎面/薄纱/刺绣/珍珠）",
+  "decor_style": "布置风格（波西米亚/经典优雅/田园/现代简约/复古/奢华）",
+  "lighting": "灯光氛围（暖光/自然光/烛光/串灯/水晶灯）",
+  "overall_mood": "整体氛围关键词（如：浪漫、清新、大气、温馨）",
+  "season_feel": "季节感（春/夏/秋/冬）"
+}
+如果某项在图片中无法判断，填写"未识别"。`,
+    },
+  ]
+
+  for (const frame of frameFiles) {
+    const framePath = path.join(framesDir, frame)
+    const base64 = fs.readFileSync(framePath).toString('base64')
+    const ext = path.extname(frame).slice(1)
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+    content.push({
+      type: 'image_url',
+      image_url: { url: `data:${mime};base64,${base64}` },
+    })
+  }
+
+  try {
+    const response = await visionClient.chat.completions.create({
+      model: VISION_MODEL,
+      messages: [{ role: 'user', content }],
+      max_tokens: 1500,
+    })
+
+    const text = response.choices[0]?.message?.content || '{}'
+    // 提取 JSON（兼容模型返回 markdown 代码块的情况）
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
+
+    // ✅ 分析完成后清理关键帧文件
+    try { fs.rmSync(framesDir, { recursive: true, force: true }) } catch {}
+
+    return result
+  } catch (error) {
+    console.error('[analyze_wedding_visuals] 视觉模型调用失败:', error.message)
+    return { error: `视觉分析失败: ${error.message}。请检查视觉模型是否可用。` }
+  }
+}
+
+/**
  * 计算预算分配
  */
 function calculateBudget(args) {
@@ -296,4 +385,34 @@ function safeJsonParse(str, fallback) {
   }
 }
 
-module.exports = { executeTool }
+/**
+ * 生成最终婚礼推荐方案摘要
+ * 返回结构化数据，前端会渲染为精美表格并支持 PDF 下载
+ */
+function generatePlanSummary(args) {
+  const items = args.items || []
+  if (items.length === 0) return { error: '请提供至少一项推荐' }
+
+  // 返回结构化数据（供前端渲染）+ 文本摘要（供 LLM 参考）
+  const lines = items.map(item => {
+    const price = item.price_range ? `，${item.price_range}` : ''
+    return `• ${item.category_cn}：${item.name} — ${item.description}${price}`
+  })
+
+  return {
+    _type: 'plan_summary',
+    items: items.map(item => ({
+      category: item.category,
+      categoryCn: item.category_cn,
+      name: item.name,
+      nameEn: item.name_en || '',
+      description: item.description,
+      priceRange: item.price_range || '',
+      image: item.image || '',
+      link: item.link || '',
+    })),
+    _text: `已生成推荐方案摘要：\n${lines.join('\n')}\n\n请向用户展示以上方案，并告知可下载 PDF 保存。`,
+  }
+}
+
+module.exports = { executeTool, analyzeVisuals }

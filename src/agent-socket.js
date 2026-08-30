@@ -27,7 +27,7 @@ function initAgentSocket(mainIo) {
     socket.data.userToken = socket.handshake.auth?.userToken || 'anonymous'
 
     socket.on('chat', async (data) => {
-      const { message, sessionId } = data
+      let { message, sessionId, mediaId } = data
       if (!message || !message.trim()) return
 
       const sid = sessionId || `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -36,9 +36,15 @@ function initAgentSocket(mainIo) {
         const session = sessions.get(sid)
         const history = session ? session.history : []
 
+        // 如果携带了 mediaId，追加到消息中供 Agent 识别
+        let agentMessage = message.trim()
+        if (mediaId) {
+          agentMessage += `\n\n[用户已上传婚礼媒体文件，mediaId: ${mediaId}，请先调用 analyze_wedding_visuals 工具分析视觉要素，再根据分析结果推荐商品]`
+        }
+
         // 运行 Agent，每个事件实时推送给前端
         const { reply, history: newHistory } = await runAgent(
-          message.trim(),
+          agentMessage,
           history,
           (event) => {
             socket.emit('agent_event', event)

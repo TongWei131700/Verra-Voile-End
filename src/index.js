@@ -20,6 +20,7 @@ const crawlRouter = require('./routes/crawl')
 const dataVersionRouter = require('./routes/dataVersion')
 const imageProxyRouter = require('./routes/imageProxy')
 const agentRouter = require('./routes/agent')
+const agentVideoRouter = require('./routes/agentVideo')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -45,6 +46,7 @@ app.use('/api/crawl', crawlRouter)
 app.use('/api/data-version', dataVersionRouter)
 app.use('/api/image-proxy', imageProxyRouter)
 app.use('/api/agent', agentRouter)
+app.use('/api/agent', agentVideoRouter)
 
 // 健康检查
 app.get('/health', (req, res) => {
@@ -75,6 +77,7 @@ async function start() {
       console.log(`  - GET  /api/crawl/state    查看爬取状态`)
       console.log(`  - GET  /api/image-proxy    图片代理`)
       console.log(`  - POST /api/agent/chat      AI 婚礼策划助手`)
+      console.log(`  - POST /api/agent/upload-media  视频/图片上传分析`)
     })
   } catch (error) {
     console.error('启动失败:', error.message)
