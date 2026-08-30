@@ -165,6 +165,54 @@ const tools = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'analyze_wedding_visuals',
+      description: '分析用户上传的婚礼视频或图片中的视觉要素。提取场地风格、色调、花艺、婚纱、布置风格等特征，返回结构化标签。当用户上传了视频/图片并希望获得类似风格的推荐时使用此工具。',
+      parameters: {
+        type: 'object',
+        properties: {
+          video_id: {
+            type: 'string',
+            description: '用户上传视频/图片后返回的 mediaId（格式如 v_xxxxx_xxxxxx）',
+          },
+        },
+        required: ['video_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_plan_summary',
+      description: '生成最终婚礼推荐方案摘要。当用户已确定最终选择、要求汇总推荐、或需要完整方案时使用此工具。将各项推荐汇总为结构化方案，前端会渲染为精美表格并支持 PDF 下载。',
+      parameters: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            description: '推荐项目列表，每项代表一个婚礼服务类别',
+            items: {
+              type: 'object',
+              properties: {
+                category: { type: 'string', description: '类别英文名：venue/flowers/dress/photographer/wine/team/decoration' },
+                category_cn: { type: 'string', description: '类别中文名：场地/花艺/礼服/摄影/酒水/策划团队/布置' },
+                name: { type: 'string', description: '推荐商品/服务中文名称' },
+                name_en: { type: 'string', description: '商品/服务英文名称（如 Villa Rossa、COCCINELLE、Princess A-line）' },
+                description: { type: 'string', description: '一句话推荐理由' },
+                price_range: { type: 'string', description: '价格区间，如 €5000-8000 或 ¥30000-50000' },
+                image: { type: 'string', description: '商品封面图 URL（可选）' },
+                link: { type: 'string', description: '商品详情页链接（必须使用工具返回的 slug 拼接，如 /destinations/villa-rossa、/flowers/product/coccinelle）' },
+              },
+              required: ['category', 'category_cn', 'name', 'description', 'price_range'],
+            },
+          },
+        },
+        required: ['items'],
+      },
+    },
+  },
 ]
 
 module.exports = tools
