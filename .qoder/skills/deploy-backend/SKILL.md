@@ -20,19 +20,32 @@ description: 将后端代码打包部署到远程服务器，包括上传代码�
 ## 服务器信息
 
 - **IP**: `47.99.138.250`
-- **SSH用户**: `root`
-- **SSH认证**: **仅密钥认证**（服务器已禁用密码登录，用密码会报 `Permission denied (publickey)`）。本机 `~/.ssh/id_ed25519` 已授权，直接 `ssh/scp root@47.99.138.250` 即可，无需 expect
-- **历史密码备份**（仅数据库用途，SSH 不可用）: `TongWei131700` / `Chineseman.`
+- **SSH用户**: `admin`（root 已禁止远程登录）
+- **SSH认证**: **仅密钥认证**（服务器已禁用密码登录）。连接后需 `su -` 切换到 root 执行操作
+- **SSH连接方式**: `ssh admin@47.99.138.250`，然后 `su -` 获取 root 权限
 - **部署路径**: `/var/www/verra-voile-end`
-- **服务端口**: `3000`
+- **服务端口**: `3000`（仅监听 127.0.0.1，外网不可直接访问，通过 Nginx 反代）
 - **PM2进程名**: `verra-voile-api`
+
+### 安全配置（2026-09-02 加固后）
+
+- `PermitRootLogin no` — 禁止 root 直接 SSH
+- `PasswordAuthentication no` — 仅允许密钥认证
+- `MaxAuthTries 3` — 单次连接最多 3 次尝试
+- `fail2ban` — SSH 3 次失败封 IP 24 小时
+- `UFW 防火墙` — 仅开放 22/80/443 端口
+- Node.js 绑定 `127.0.0.1` — 3000 端口不暴露到外网
+
+### 服务器 SSH 受限时的备选方案
+
+如果本机没有 admin 用户的 SSH 密钥导致无法连接，需通过**阿里云控制台 VNC** 登录服务器操作。
 
 ## 数据库配置
 
 - **DB_HOST**: `127.0.0.1`
 - **DB_PORT**: `3306`
 - **DB_USER**: `root`
-- **DB_PASSWORD**: `TongWei131700`
+- **DB_PASSWORD**: （空，服务器 MySQL root 使用 mysql_native_password 无密码认证）
 - **DB_NAME**: `verra_voile`
 
 ## 部署步骤
@@ -52,36 +65,18 @@ tar --exclude='node_modules' --exclude='.git' --exclude='uploads' --exclude='.en
 
 ### 3. 上传到服务器
 
-使用 `expect` 处理密码认证：
+使用密钥认证直接上传（无需 expect）：
 
 ```bash
-expect << 'EXPECT_EOF'
-set timeout 60
-spawn scp -o StrictHostKeyChecking=no /tmp/verra-voile-end.tar.gz root@47.99.138.250:/tmp/
-expect {
-    "password:" {
-        send "TongWei131700\r"
-        exp_continue
-    }
-    eof
-}
-EXPECT_EOF
+scp -o StrictHostKeyChecking=no /tmp/verra-voile-end.tar.gz admin@47.99.138.250:/tmp/
 ```
+
+> 如果本机没有 admin 的 SSH 密钥，需先通过 VNC 将本机公钥添加到 `/home/admin/.ssh/authorized_keys`，或使用 VNC 手动执行后续步骤。
 
 ### 4. 服务器解压并安装依赖
 
 ```bash
-expect << 'EXPECT_EOF'
-set timeout 120
-spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "cd /var/www/verra-voile-end && rm -rf src package.json package-lock.json && tar -xzf /tmp/verra-voile-end.tar.gz && npm install --production 2>&1 | tail -5 && echo DEPLOY_OK"
-expect {
-    "password:" {
-        send "TongWei131700\r"
-        exp_continue
-    }
-    eof
-}
-EXPECT_EOF
+ssh admin@47.99.138.250 "sudo bash -c 'cd /var/www/verra-voile-end && rm -rf src package.json package-lock.json && tar -xzf /tmp/verra-voile-end.tar.gz && npm install --production 2>&1 | tail -5 && echo DEPLOY_OK'"
 ```
 
 ### 5. 停止服务并释放端口
@@ -89,17 +84,7 @@ EXPECT_EOF
 **必须先杀端口再重启**，否则旧进程占用端口 3000 会导致 EADDRINUSE 错误，服务陷入崩溃循环：
 
 ```bash
-expect << 'EXPECT_EOF'
-set timeout 30
-spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "pm2 stop verra-api && sleep 1 && fuser -k 3000/tcp 2>/dev/null; sleep 2 && echo PORT_CLEARED"
-expect {
-    "password:" {
-        send "TongWei131700\r"
-        exp_continue
-    }
-    eof
-}
-EXPECT_EOF
+ssh admin@47.99.138.250 "sudo bash -c 'pm2 stop verra-voile-api && sleep 1 && fuser -k 3000/tcp 2>/dev/null; sleep 2 && echo PORT_CLEARED'"
 ```
 
 ### 6. 启动服务
@@ -107,17 +92,7 @@ EXPECT_EOF
 端口释放后再启动，避免端口冲突：
 
 ```bash
-expect << 'EXPECT_EOF'
-set timeout 30
-spawn ssh -o StrictHostKeyChecking=no root@47.99.138.250 "pm2 start verra-api && sleep 3 && curl -s http://localhost:3000/health"
-expect {
-    "password:" {
-        send "TongWei131700\r"
-        exp_continue
-    }
-    eof
-}
-EXPECT_EOF
+ssh admin@47.99.138.250 "sudo bash -c 'pm2 restart verra-voile-api && sleep 3 && curl -s http://localhost:3000/health'"
 ```
 
 ### 7. 同步本地数据库到服务器（⚠️ 必选步骤，绝不可跳过！）
@@ -146,10 +121,10 @@ echo "同步表: $TABLES"
 mysqldump -u root verra_voile $TABLES --skip-lock-tables > /tmp/full_business_tables.sql
 
 # 3. 上传 SQL 到服务器
-scp /tmp/full_business_tables.sql root@47.99.138.250:/tmp/
+scp /tmp/full_business_tables.sql admin@47.99.138.250:/tmp/
 
-# 4. 服务器导入
-ssh root@47.99.138.250 "mysql -u root -p'TongWei131700' verra_voile < /tmp/full_business_tables.sql && echo DB_SYNC_OK"
+# 4. 服务器导入（MySQL root 无密码）
+ssh admin@47.99.138.250 "sudo bash -c 'mysql -u root verra_voile < /tmp/full_business_tables.sql && echo DB_SYNC_OK'"
 ```
 
 **验证**：导入后对比关键表数量，如 `SELECT COUNT(*) FROM crawled_venues`，确保本地与服务器一致。
@@ -158,11 +133,11 @@ ssh root@47.99.138.250 "mysql -u root -p'TongWei131700' verra_voile < /tmp/full_
 
 ### 8. 验证部署
 
-健康检查 + 数据库验证：
+健康检查 + 数据库验证（通过域名访问，3000 端口已不对外）：
 
 ```bash
-# API 健康检查
-curl -s http://47.99.138.250/api/products/crawled-destinations | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'数据: {len(d.get(\"data\",[]))} 条')"
+# API 健康检查（通过域名）
+curl -s https://www.europewedding.cn/api/products/crawled-venues | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'场地: {len(d.get(\"data\",[]))} 条')"
 ```
 
 确认返回 200 且数据条数与本地一致。
