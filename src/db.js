@@ -207,6 +207,9 @@ async function initDB() {
   await ensureCrawledTravelAttractionsTable(pool)
   await seedTravelAttractions(pool)
 
+  // 埋点事件表
+  await ensureAnalyticsEventsTable(pool)
+
   // 目的地场地表（含城市分组字段）
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
@@ -793,4 +796,30 @@ async function seedTravelAttractions(pool) {
   console.log(`✓ 已插入 ${attractions.length} 条旅拍景点种子数据`)
 }
 
-module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable, ensureCrawledTravelAttractionsTable, seedTravelAttractions }
+/**
+ * 创建埋点事件表
+ */
+async function ensureAnalyticsEventsTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      session_id VARCHAR(64) NOT NULL COMMENT '会话标识（前端生成）',
+      user_token VARCHAR(64) DEFAULT '' COMMENT '用户标识（登录用户/访客）',
+      event_type VARCHAR(50) NOT NULL COMMENT '事件类型：page_view / click / add_cart / consult ...',
+      page_path VARCHAR(300) DEFAULT '' COMMENT '当前页面路径',
+      referrer VARCHAR(300) DEFAULT '' COMMENT '来源页面',
+      element_id VARCHAR(100) DEFAULT '' COMMENT '触发元素标识（点击事件用）',
+      metadata JSON COMMENT '扩展数据 {product_id, category, price, ...}',
+      user_agent VARCHAR(500) DEFAULT '' COMMENT '设备信息',
+      ip VARCHAR(45) DEFAULT '' COMMENT '访客IP',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_session (session_id),
+      INDEX idx_event_type (event_type),
+      INDEX idx_user_token (user_token),
+      INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='埋点事件表'
+  `)
+  console.log('✓ 表 analytics_events 已就绪')
+}
+
+module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable, ensureCrawledTravelAttractionsTable, seedTravelAttractions, ensureAnalyticsEventsTable }

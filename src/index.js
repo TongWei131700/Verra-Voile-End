@@ -21,6 +21,7 @@ const dataVersionRouter = require('./routes/dataVersion')
 const imageProxyRouter = require('./routes/imageProxy')
 const agentRouter = require('./routes/agent')
 const agentVideoRouter = require('./routes/agentVideo')
+const analyticsRouter = require('./routes/analytics')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -47,6 +48,7 @@ app.use('/api/data-version', dataVersionRouter)
 app.use('/api/image-proxy', imageProxyRouter)
 app.use('/api/agent', agentRouter)
 app.use('/api/agent', agentVideoRouter)
+app.use('/api/analytics', analyticsRouter)
 
 // 健康检查
 app.get('/health', (req, res) => {
