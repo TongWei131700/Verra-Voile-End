@@ -51,8 +51,10 @@ async function searchVenues(args) {
     params.push(args.country, args.country)
   }
   if (args.city) {
-    conditions.push('(city = ? OR city_cn = ?)')
-    params.push(args.city, args.city)
+    // 模糊匹配 city 字段 + 回退到名称/slug 中包含关键词的场地
+    const cityKw = `%${args.city}%`
+    conditions.push('(city LIKE ? OR city_cn LIKE ? OR name LIKE ? OR slug LIKE ?)')
+    params.push(cityKw, cityKw, cityKw, cityKw)
   }
   if (args.max_budget) {
     conditions.push('price <= ?')
@@ -133,8 +135,10 @@ async function searchFlorists(args) {
     params.push(args.country, args.country)
   }
   if (args.city) {
-    conditions.push('(city = ? OR city_cn = ?)')
-    params.push(args.city, args.city)
+    // 模糊匹配 city 字段 + 回退到名称/slug
+    const cityKw = `%${args.city}%`
+    conditions.push('(city LIKE ? OR city_cn LIKE ? OR name LIKE ? OR slug LIKE ?)')
+    params.push(cityKw, cityKw, cityKw, cityKw)
   }
   if (args.max_budget) {
     conditions.push('price <= ?')
