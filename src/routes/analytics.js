@@ -1,6 +1,10 @@
 const express = require('express')
 const router = express.Router()
 const { pool } = require('../db')
+const { sendMail } = require('./mailer')
+
+// 已通知过的 sessionId 集合（内存级，重启后重置）
+const notifiedSessions = new Set()
 
 /**
  * POST /api/analytics/report
@@ -146,6 +150,56 @@ router.get('/timeline', async (req, res) => {
     )
     res.json({ success: true, data: rows })
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+/**
+ * POST /api/analytics/visit-notify
+ * 用户进入首页时发送邮件通知（同一 sessionId 只通知一次）
+ * Body: { sessionId, userToken, referrer, userAgent }
+ */
+router.post('/visit-notify', async (req, res) => {
+  try {
+    const { sessionId, userToken, referrer } = req.body
+    if (!sessionId) return res.json({ success: false, error: '缺少 sessionId' })
+
+    // 同一 sessionId 只通知一次
+    if (notifiedSessions.has(sessionId)) {
+      return res.json({ success: true, notified: false, reason: 'already_notified' })
+    }
+    notifiedSessions.add(sessionId)
+
+    // 防止内存无限增长：超过 10000 条时清理最早的一半
+    if (notifiedSessions.size > 10000) {
+      const arr = Array.from(notifiedSessions)
+      for (let i = 0; i < 5000; i++) notifiedSessions.delete(arr[i])
+    }
+
+    const ua = req.headers['user-agent'] || ''
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || ''
+    const isGuest = !userToken || userToken.startsWith('guest_')
+    const userLabel = isGuest ? `访客 (${userToken || '未知'})` : `用户 (${userToken})`
+    const time = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+
+    const subject = `🏠 新访客进入首页 - ${time}`
+    const html = `
+      <h2>有新访客进入首页</h2>
+      <table border="0" cellpadding="6" cellspacing="0" style="font-size:14px;line-height:1.8">
+        <tr><td style="color:#888;width:100px">用户身份</td><td><b>${userLabel}</b></td></tr>
+        <tr><td style="color:#888">Session</td><td>${sessionId}</td></tr>
+        <tr><td style="color:#888">IP 地址</td><td>${ip || '未知'}</td></tr>
+        <tr><td style="color:#888">来源</td><td>${referrer || '直接访问'}</td></tr>
+        <tr><td style="color:#888">浏览器</td><td>${ua.substring(0, 200)}</td></tr>
+        <tr><td style="color:#888">时间</td><td>${time}</td></tr>
+      </table>
+      <p style="margin-top:20px;color:#999;font-size:12px">同一 Session 不会重复通知</p>
+    `
+
+    const result = await sendMail(subject, html)
+    res.json({ success: result.success, notified: result.success })
+  } catch (err) {
+    console.error('visit-notify 失败:', err.message)
     res.status(500).json({ success: false, error: err.message })
   }
 })
