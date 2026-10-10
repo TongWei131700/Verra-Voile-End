@@ -213,6 +213,19 @@ async function initDB() {
   // 目的地场地表（含城市分组字段）
   await ensureDestinationTable(pool)
   await seedDestinationVenues(pool)
+
+  // 小红书标签表
+  await ensureXhsTagsTable(pool)
+  await seedXhsDefaultTags(pool)
+
+  // 小红书搜索历史表
+  await ensureXhsSearchHistoryTable(pool)
+
+  // 小红书搜索任务表
+  await ensureXhsSearchTasksTable(pool)
+
+  // 小红书帖子表
+  await ensureXhsPostsTable(pool)
 }
 
 /**
@@ -822,4 +835,111 @@ async function ensureAnalyticsEventsTable(pool) {
   console.log('✓ 表 analytics_events 已就绪')
 }
 
-module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable, ensureCrawledTravelAttractionsTable, seedTravelAttractions, ensureAnalyticsEventsTable }
+/**
+ * 创建小红书标签表
+ */
+async function ensureXhsTagsTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS xhs_tags (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL COMMENT '标签名称',
+      sort_order INT DEFAULT 0 COMMENT '排序权重',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_name (name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='小红书订阅标签表'
+  `)
+  console.log('✓ 表 xhs_tags 已就绪')
+}
+
+/**
+ * 种子数据：默认小红书标签（仅空表时插入）
+ */
+async function seedXhsDefaultTags(pool) {
+  const [rows] = await pool.execute('SELECT COUNT(*) as cnt FROM xhs_tags')
+  if (rows[0].cnt > 0) return
+
+  const defaultTags = ['欧洲婚礼', '意大利婚礼', '目的地婚礼', '法国婚礼', '冰岛婚礼']
+  for (let i = 0; i < defaultTags.length; i++) {
+    await pool.execute(
+      'INSERT INTO xhs_tags (name, sort_order) VALUES (?, ?)',
+      [defaultTags[i], i]
+    )
+  }
+  console.log(`✓ 已插入 ${defaultTags.length} 个默认小红书标签`)
+}
+
+/**
+ * 创建小红书搜索历史表
+ */
+async function ensureXhsSearchHistoryTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS xhs_search_history (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      search_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '搜索时间',
+      tags JSON NOT NULL COMMENT '搜索标签列表',
+      time_period VARCHAR(20) DEFAULT '' COMMENT '时间范围',
+      result_count INT DEFAULT 0 COMMENT '结果数量',
+      posts JSON NOT NULL COMMENT '帖子标题和链接',
+      INDEX idx_search_time (search_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='小红书搜索历史表'
+  `)
+  console.log('✓ 表 xhs_search_history 已就绪')
+}
+
+/**
+ * 创建小红书搜索任务表
+ */
+async function ensureXhsSearchTasksTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS xhs_search_tasks (
+      id VARCHAR(36) PRIMARY KEY COMMENT 'UUID 任务ID',
+      status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '状态: pending/running/done/failed',
+      tags JSON NOT NULL COMMENT '搜索标签列表',
+      time_period VARCHAR(20) DEFAULT '' COMMENT '时间范围',
+      current_step INT DEFAULT 0 COMMENT '当前搜索到第几个标签',
+      total_steps INT DEFAULT 0 COMMENT '标签总数',
+      current_keyword VARCHAR(100) DEFAULT '' COMMENT '当前搜索关键词',
+      result_count INT DEFAULT 0 COMMENT '结果帖子数量',
+      error_message VARCHAR(500) DEFAULT '' COMMENT '错误信息',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_status (status),
+      INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='小红书搜索任务表'
+  `)
+  console.log('✓ 表 xhs_search_tasks 已就绪')
+}
+
+/**
+ * 创建小红书帖子表
+ */
+async function ensureXhsPostsTable(pool) {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS xhs_posts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      post_id VARCHAR(100) NOT NULL COMMENT '小红书帖子ID',
+      task_id VARCHAR(36) NOT NULL COMMENT '所属搜索任务ID',
+      keyword VARCHAR(100) NOT NULL COMMENT '搜索关键词',
+      title VARCHAR(500) DEFAULT '' COMMENT '帖子标题',
+      author VARCHAR(200) DEFAULT '' COMMENT '作者昵称',
+      likes VARCHAR(20) DEFAULT '0' COMMENT '点赞数',
+      collects VARCHAR(20) DEFAULT '0' COMMENT '收藏数',
+      comments VARCHAR(20) DEFAULT '0' COMMENT '评论数',
+      shares VARCHAR(20) DEFAULT '0' COMMENT '分享数',
+      url VARCHAR(500) DEFAULT '' COMMENT '帖子链接',
+      xsec_token VARCHAR(500) DEFAULT '' COMMENT 'xsec token',
+      image_content TEXT COMMENT '图片文字内容（手动提取）',
+      images JSON COMMENT '图片列表 [{url, width, height}]',
+      is_high_value TINYINT(1) DEFAULT 0 COMMENT '是否高价值询盘帖',
+      is_ad TINYINT(1) DEFAULT 0 COMMENT '是否广告帖',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_post_task (post_id, task_id),
+      INDEX idx_task_id (task_id),
+      INDEX idx_keyword (keyword),
+      INDEX idx_is_high_value (is_high_value)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='小红书帖子表'
+  `)
+  console.log('✓ 表 xhs_posts 已就绪')
+}
+
+module.exports = { pool, initDB, getCategoryTable, ensureCategoryTable, ensureDestinationTable, ensureWeddingTeamsTable, ensureCrawledPhotographersTable, ensureCrawledFloristsTable, ensureCrawledVenuesTable, ensureCrawledDressesTable, ensureCrawledTravelAttractionsTable, seedTravelAttractions, ensureAnalyticsEventsTable, ensureXhsTagsTable, ensureXhsSearchHistoryTable, ensureXhsSearchTasksTable, ensureXhsPostsTable }
