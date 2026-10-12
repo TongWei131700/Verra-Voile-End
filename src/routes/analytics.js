@@ -3,6 +3,13 @@ const router = express.Router()
 const { pool } = require('../db')
 const { sendMail } = require('./mailer')
 
+// ISO 时间转 MySQL datetime 格式
+function toMysqlDatetime(isoStr) {
+  const d = new Date(isoStr)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
 // 已通知过的 sessionId 集合（内存级，重启后重置）
 const notifiedSessions = new Set()
 
@@ -37,7 +44,7 @@ router.post('/report', async (req, res) => {
         ev.metadata ? JSON.stringify(ev.metadata) : null,
         ua.substring(0, 500),
         ip.substring(0, 45),
-        ev.createdAt || new Date().toISOString()  // 前端未传则用服务器当前时间
+        ev.createdAt ? toMysqlDatetime(ev.createdAt) : toMysqlDatetime(new Date().toISOString())  // 转为 MySQL datetime 格式
       )
     }
 
@@ -155,6 +162,46 @@ router.get('/timeline', async (req, res) => {
 })
 
 /**
+ * GET /api/analytics/session/:sessionId
+ * 按 sessionId 查询完整访问路径（全链路追踪）
+ */
+router.get('/session/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params
+    const [rows] = await pool.query(
+      `SELECT id, event_type, page_path, referrer, element_id, metadata, created_at
+       FROM analytics_events
+       WHERE session_id = ?
+       ORDER BY created_at ASC`,
+      [sessionId]
+    )
+    
+    // 构建访问路径摘要
+    const pageViews = rows.filter(r => r.event_type === 'page_view')
+    const pathSequence = pageViews.map(r => r.page_path)
+    const duration = pageViews.length >= 2
+      ? Math.round((new Date(pageViews[pageViews.length - 1].created_at) - new Date(pageViews[0].created_at)) / 1000)
+      : 0
+    
+    res.json({
+      success: true,
+      data: {
+        sessionId,
+        totalEvents: rows.length,
+        pageViewCount: pageViews.length,
+        pathSequence,           // 访问路径数组 ["/", "/destinations", "/destinations/xxx"]
+        durationSeconds: duration, // 会话时长（秒）
+        firstPage: pathSequence[0] || null,
+        lastPage: pathSequence[pathSequence.length - 1] || null,
+        events: rows,
+      }
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+/**
  * POST /api/analytics/visit-notify
  * 用户进入首页时发送邮件通知（同一 sessionId 只通知一次）
  * Body: { sessionId, userToken, referrer, userAgent }
@@ -183,16 +230,30 @@ router.post('/visit-notify', async (req, res) => {
     const time = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
 
     const subject = `🏠 新访客进入首页 - ${time}`
+    
+    // 生成追踪链接（公开页面，无需登录）
+    const traceUrl = `https://europewedding.cn/trace?sid=${encodeURIComponent(sessionId)}`
+    
     const html = `
       <h2>有新访客进入首页</h2>
       <table border="0" cellpadding="6" cellspacing="0" style="font-size:14px;line-height:1.8">
         <tr><td style="color:#888;width:100px">用户身份</td><td><b>${userLabel}</b></td></tr>
-        <tr><td style="color:#888">Session</td><td>${sessionId}</td></tr>
+        <tr><td style="color:#888">Session</td><td style="font-family:monospace;font-size:12px">${sessionId}</td></tr>
         <tr><td style="color:#888">IP 地址</td><td>${ip || '未知'}</td></tr>
         <tr><td style="color:#888">来源</td><td>${referrer || '直接访问'}</td></tr>
         <tr><td style="color:#888">浏览器</td><td>${ua.substring(0, 200)}</td></tr>
         <tr><td style="color:#888">时间</td><td>${time}</td></tr>
       </table>
+      
+      <div style="margin-top:24px;padding:16px;background:#f8f6f3;border-radius:8px;border-left:4px solid #2a2723">
+        <p style="margin:0 0 12px 0;font-size:14px;color:#555">👇 点击下方按钮查看该访客的完整访问路径</p>
+        <a href="${traceUrl}" 
+           style="display:inline-block;padding:10px 24px;background:#2a2723;color:#fff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600">
+          📊 查看访问路径
+        </a>
+        <p style="margin:12px 0 0 0;font-size:12px;color:#999">（需要管理员登录）</p>
+      </div>
+      
       <p style="margin-top:20px;color:#999;font-size:12px">同一 Session 不会重复通知</p>
     `
 
