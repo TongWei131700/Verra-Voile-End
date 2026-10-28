@@ -74,3 +74,12 @@ test('second message on a busy socket does not emit an error that terminates the
   resolve({ reply: 'ok', history: [] }); await pending
   assert.equal(s.s.data.agentController, null)
 })
+
+
+test('socket echoes requestId on response events and session without replacing it', async () => {
+  reset(); const s = socket()
+  await s.handlers.chat({ message: 'flowers', sessionId: 'tagged', requestId: 'request-three' })
+  const events = s.events.filter(([name]) => name === 'agent_event' || name === 'agent_session')
+  assert.ok(events.length >= 3)
+  assert.ok(events.every(([, data]) => data.requestId === 'request-three'))
+})

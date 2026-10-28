@@ -28,7 +28,7 @@ function initAgentSocket(mainIo) {
 
     socket.on('chat', async (data) => {
       if (socket.data.agentController) { socket.emit('agent_busy', { code: 'SESSION_BUSY' }); return }
-      let { message, sessionId, mediaId } = data || {}
+      let { message, sessionId, mediaId, requestId } = data || {}
       if (typeof message !== 'string' || !message.trim() || message.length > 8000) {
         socket.emit('agent_event', { type: 'error', content: '消息为空或超过长度限制', code: 'INVALID_INPUT' }); return
       }
@@ -36,6 +36,8 @@ function initAgentSocket(mainIo) {
         socket.emit('agent_event', { type: 'error', content: '媒体编号无效', code: 'INVALID_INPUT' }); return
       }
 
+      if (requestId != null && (typeof requestId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(requestId))) return
+      requestId = requestId || randomUUID()
       const sid = sessionId ?? randomUUID()
       const controller = new AbortController()
       socket.data.agentController = controller
@@ -57,7 +59,7 @@ function initAgentSocket(mainIo) {
           agentMessage,
           history,
           (event) => {
-            if (socket.connected && !controller.signal.aborted) socket.emit('agent_event', event)
+            if (socket.connected && !controller.signal.aborted) socket.emit('agent_event', { ...event, requestId })
           },
           { signal: controller.signal }
         )
@@ -69,7 +71,7 @@ function initAgentSocket(mainIo) {
           lastActive: Date.now(),
         })
 
-        socket.emit('agent_session', { sessionId: sid })
+        socket.emit('agent_session', { sessionId: sid, requestId })
         release(); release = null
         if (socket.data.agentController === controller) socket.data.agentController = null
 
@@ -125,6 +127,7 @@ function initAgentSocket(mainIo) {
           type: 'error',
           content: err instanceof AgentError ? err.message : 'AI 服务暂时不可用，请稍后再试。',
           code: err.code || 'AGENT_FAILED',
+          requestId,
         })
       } finally { release?.(); if (socket.data.agentController === controller) socket.data.agentController = null }
     })
