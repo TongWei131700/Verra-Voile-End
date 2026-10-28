@@ -3,13 +3,13 @@
  * Socket.IO namespace: /agent
  * 实时推送 LLM 思考过程和流式回复
  */
-const { runAgent } = require('./agent')
+const { runAgent, trimHistory } = require('./agent')
 const { pool } = require('./db')
 const { sendMail } = require('./routes/mailer')
+const { randomUUID } = require('node:crypto')
+const { sessions } = require('./agent/sessions')
+const { AgentError } = require('./agent/harness')
 
-// 内存会话存储
-const sessions = new Map()
-const SESSION_TTL = 30 * 60 * 1000
 // 已通知过的用户（避免同一用户重复发邮件）
 const notifiedUsers = new Set()
 
@@ -27,12 +27,22 @@ function initAgentSocket(mainIo) {
     socket.data.userToken = socket.handshake.auth?.userToken || 'anonymous'
 
     socket.on('chat', async (data) => {
-      let { message, sessionId, mediaId } = data
-      if (!message || !message.trim()) return
+      if (socket.data.agentController) { socket.emit('agent_busy', { code: 'SESSION_BUSY' }); return }
+      let { message, sessionId, mediaId } = data || {}
+      if (typeof message !== 'string' || !message.trim() || message.length > 8000) {
+        socket.emit('agent_event', { type: 'error', content: '消息为空或超过长度限制', code: 'INVALID_INPUT' }); return
+      }
+      if (mediaId != null && (typeof mediaId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(mediaId))) {
+        socket.emit('agent_event', { type: 'error', content: '媒体编号无效', code: 'INVALID_INPUT' }); return
+      }
 
-      const sid = sessionId || `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const sid = sessionId ?? randomUUID()
+      const controller = new AbortController()
+      socket.data.agentController = controller
+      let release
 
       try {
+        release = sessions.acquire(sid)
         const session = sessions.get(sid)
         const history = session ? session.history : []
 
@@ -47,17 +57,23 @@ function initAgentSocket(mainIo) {
           agentMessage,
           history,
           (event) => {
-            socket.emit('agent_event', event)
-          }
+            if (socket.connected && !controller.signal.aborted) socket.emit('agent_event', event)
+          },
+          { signal: controller.signal }
         )
+        if (controller.signal.aborted) return
 
         // 更新会话（保留最近 20 条）
         sessions.set(sid, {
-          history: newHistory.slice(-20),
+          history: trimHistory(newHistory),
           lastActive: Date.now(),
         })
 
-        // 保存到数据库
+        socket.emit('agent_session', { sessionId: sid })
+        release(); release = null
+        if (socket.data.agentController === controller) socket.data.agentController = null
+
+        // 审计与旧通知逻辑不再持有执行锁，避免数据库延迟阻塞下一轮。
         const userToken = socket.data?.userToken || 'anonymous'
         const thinkingLabels = []
         // 从 history 中提取思考步骤
@@ -103,34 +119,26 @@ function initAgentSocket(mainIo) {
           console.error('[Agent] 保存对话失败:', dbErr.message)
         }
 
-        socket.emit('agent_session', { sessionId: sid })
       } catch (err) {
-        console.error('[Agent WS] 错误:', err.message)
+        if (!socket.connected) return
         socket.emit('agent_event', {
           type: 'error',
-          content: 'AI 服务暂时不可用，请稍后再试。',
+          content: err instanceof AgentError ? err.message : 'AI 服务暂时不可用，请稍后再试。',
+          code: err.code || 'AGENT_FAILED',
         })
-      }
+      } finally { release?.(); if (socket.data.agentController === controller) socket.data.agentController = null }
     })
 
     socket.on('clear', () => {
       // 清除由前端传 sessionId 处理，这里不主动删
     })
 
+    socket.on('cancel', () => { socket.data.agentController?.abort() })
     socket.on('disconnect', () => {
+      socket.data.agentController?.abort()
       console.log('🤵 Agent 客户端断开')
     })
   })
-
-  // 定时清理过期会话
-  setInterval(() => {
-    const now = Date.now()
-    for (const [key, session] of sessions.entries()) {
-      if (now - session.lastActive > SESSION_TTL) {
-        sessions.delete(key)
-      }
-    }
-  }, 10 * 60 * 1000)
 
   console.log('✓ Agent WebSocket 服务已启动 (/agent)')
   return agentNs
