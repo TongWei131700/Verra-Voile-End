@@ -47,6 +47,10 @@ function createAgentRunner({ client, model, systemPrompt, tools, executeTool, ma
   })
 
   return async function runAgent(userMessage, conversationHistory = [], onEvent = null, options = {}) {
+    const activeTools = options.allowedTools
+      ? tools.filter(tool => options.allowedTools.includes(tool.function.name))
+      : tools
+    const activeToolNames = new Set(activeTools.map(tool => tool.function.name))
     const run = harness.begin(userMessage, options.signal)
     let failure
     try {
@@ -60,7 +64,7 @@ function createAgentRunner({ client, model, systemPrompt, tools, executeTool, ma
         return run.model(async signal => {
           const stream = await client.chat.completions.create({
             model, messages, stream: true, max_tokens: run.limits.maxOutputTokens,
-            ...(!summarize ? { tools, tool_choice: 'auto' } : {}),
+            ...(!summarize ? { tools: activeTools, tool_choice: 'auto' } : {}),
           }, { signal, maxRetries: 0 })
           let content = '', finishReason
           const calls = new Map()
@@ -101,7 +105,7 @@ function createAgentRunner({ client, model, systemPrompt, tools, executeTool, ma
           try {
             if (!call.id) throw new Error('Missing tool call id')
             const validate = validators.get(call.function.name)
-            if (!validate) throw new Error('Unknown tool')
+            if (!activeToolNames.has(call.function.name)) throw new Error('Unknown tool')
             args = JSON.parse(call.function.arguments || '{}')
             if (!validate(args)) throw new Error('Invalid tool arguments')
           } catch {
@@ -140,7 +144,11 @@ function createAgentRunner({ client, model, systemPrompt, tools, executeTool, ma
         .addEdge('answer', END)
         .compile()
       const result = await graph.invoke({
-        messages: [{ role: 'system', content: systemPrompt }, ...trimHistory(conversationHistory), { role: 'user', content: userMessage }],
+        messages: [
+          { role: 'system', content: options.systemPromptSuffix ? `${systemPrompt}\n\n${options.systemPromptSuffix}` : systemPrompt },
+          ...trimHistory(conversationHistory),
+          { role: 'user', content: userMessage },
+        ],
         rounds: 0,
       }, { recursionLimit: maxToolRounds * 2 + 5, signal: run.signal })
       const history = result.messages.slice(1)

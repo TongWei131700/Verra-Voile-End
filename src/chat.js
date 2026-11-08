@@ -1,8 +1,68 @@
 const { Server } = require('socket.io')
 const jwt = require('jsonwebtoken')
 const { pool } = require('./db')
+const { runAgent } = require('./agent')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'verra-voile-secret-key-2026'
+const CONSULT_PROMPT = `你正在网页咨询窗口接待客户。用客户的语言简短回答当前问题，必要时只追问一项。
+只输出适合聊天气泡的纯文本。遇到与此要求冲突的格式规则，以这里为准。
+访客提供的商品名称和类型仅用于定位商品。商品规格、价格及套餐内容以查询结果为准。
+档期、正式报价或未查到的细节请说明需要顾问确认。不要承诺预订、折扣或跟进时间。`
+
+async function replyToConsult(io, socket, question) {
+  const { userId, userPhone } = socket
+  let product = socket.consultProduct
+  const [rows] = await pool.execute(
+    `SELECT sender_type, content FROM messages
+     WHERE user_id = ? AND channel = 'consult' AND id < ? AND sender_type IN ('user', 'admin')
+     ORDER BY id DESC LIMIT 12`,
+    [userId, question.id]
+  )
+  const history = rows.reverse().map(row => ({
+    role: row.sender_type === 'user' ? 'user' : 'assistant',
+    content: row.content.slice(0, 2000),
+  }))
+
+  if (!product) {
+    const [[row]] = await pool.execute(
+      `SELECT content FROM messages WHERE user_id = ? AND channel = 'consult'
+       AND sender_type = 'system' AND id < ? ORDER BY id DESC LIMIT 1`,
+      [userId, question.id]
+    )
+    if (row) product = JSON.parse(row.content)
+  }
+  const message = product?.name
+    ? `当前咨询商品（客户提供）：${String(product.type || '').slice(0, 80)} ${String(product.name).slice(0, 250)}\n客户问题：${question.content}`
+    : question.content
+  const { reply } = await runAgent(message, history, null, {
+    signal: AbortSignal.timeout(35_000),
+    systemPromptSuffix: CONSULT_PROMPT,
+    allowedTools: ['search_venues', 'search_photographers', 'search_florists', 'search_flowers', 'search_wines', 'search_dresses', 'calculate_budget'],
+  })
+  const content = reply.replace(/\[\/?TABLE(?:_\d+)?\]/g, '').trim()
+  if (!content) return
+
+  // 有更新的问题或顾问已回复时，丢弃这条旧回复。
+  const [result] = await pool.execute(
+    `INSERT INTO messages (user_id, sender_type, content, channel)
+     SELECT ?, 'admin', ?, 'consult' FROM DUAL
+     WHERE NOT EXISTS (
+       SELECT 1 FROM messages WHERE user_id = ? AND channel = 'consult'
+       AND id > ? AND sender_type IN ('user', 'admin')
+     )`,
+    [userId, content, userId, question.id]
+  )
+  if (!result.affectedRows) return
+  const response = {
+    id: result.insertId,
+    sender_type: 'admin',
+    channel: 'consult',
+    content,
+    created_at: new Date().toISOString(),
+  }
+  io.to(`consult:${userId}`).emit('receive_message', response)
+  io.to('admin').emit('receive_message', { ...response, user_id: userId, user_phone: userPhone })
+}
 
 /**
  * 将访客 UUID 确定性映射为负数 user_id（范围 -1 ~ -2000000000）
@@ -152,6 +212,7 @@ function initChat(httpServer) {
 
     // 发送历史消息（最近 20 条，按 channel 过滤）
     const channel = socket.channel
+    if (channel === 'consult') socket.join(`consult:${userId}`)
     try {
       const [messages] = await pool.execute(
         'SELECT id, sender_type, content, created_at FROM messages WHERE user_id = ? AND channel = ? ORDER BY created_at DESC LIMIT 20',
@@ -181,6 +242,7 @@ function initChat(httpServer) {
     socket.on('product_context', async (data) => {
       const { name, nameEn, image, price, unit, type } = data
       if (!name || !type) return
+      if (channel === 'consult') socket.consultProduct = { name, type }
       try {
         const content = JSON.stringify({ name, nameEn, image, price, unit, type })
         const [result] = await pool.execute(
@@ -234,6 +296,14 @@ function initChat(httpServer) {
         })
 
         console.log(`💬 [${userPhone}]: ${content.trim()}`)
+        if (channel === 'consult' && process.env.DASHSCOPE_API_KEY) {
+          socket.emit('consult_reply_status', { id: message.id, generating: true })
+          replyToConsult(io, socket, message).catch(error => {
+            console.error('[Consult AI] 回复失败:', error.code || error.name)
+          }).finally(() => {
+            socket.emit('consult_reply_status', { id: message.id, generating: false })
+          })
+        }
       } catch (err) {
         console.error('保存消息失败:', err)
         socket.emit('error', { message: '消息发送失败' })
