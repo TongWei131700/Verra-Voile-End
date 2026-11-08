@@ -186,7 +186,6 @@ function createConsultResponder({ pool, runAgent }) {
       : ''
     const { reply } = await runAgent(`${context}客户当前问题：${question.content}`, completedHistory(rows.filter(row => row.sender_type !== 'system')), null, {
       signal,
-      model: 'qwen3.8-max',
       enableThinking: false,
       systemPromptOverride: CONSULT_PROMPT,
       allowedTools: ['search_venues', 'search_photographers', 'search_florists', 'search_flowers', 'search_wines', 'search_dresses'],

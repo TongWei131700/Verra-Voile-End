@@ -1,3 +1,5 @@
+const DASHSCOPE_MODEL = 'qwen3.8-max'
+
 function getDashScopeConfig() {
   return {
     apiKey: process.env.DASHSCOPE_API_KEY,
@@ -6,4 +8,4 @@ function getDashScopeConfig() {
   }
 }
 
-module.exports = { getDashScopeConfig }
+module.exports = { DASHSCOPE_MODEL, getDashScopeConfig }

@@ -1,7 +1,7 @@
 /** Public Agent API. LangGraph owns the model/tool/summary execution flow. */
 const { createAgentRunner } = require('./graph')
 const { trimHistory } = require('./graph')
-const { getDashScopeConfig } = require('./dashscope')
+const { DASHSCOPE_MODEL, getDashScopeConfig } = require('./dashscope')
 
 // Lazy initialization allows health checks and tests without loading provider secrets.
 let runner
@@ -17,7 +17,7 @@ async function runAgent(userMessage, conversationHistory = [], onEvent = null, o
         timeout: 60000,
         maxRetries: 0,
       }),
-      model: 'qwen3.7-plus',
+      model: DASHSCOPE_MODEL,
       systemPrompt: SYSTEM_PROMPT,
       tools,
       executeTool,

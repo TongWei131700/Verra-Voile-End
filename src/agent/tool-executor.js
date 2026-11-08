@@ -6,10 +6,9 @@ const { pool } = require('../db')
 const OpenAI = require('openai')
 const fs = require('fs')
 const path = require('path')
-const { getDashScopeConfig } = require('./dashscope')
+const { DASHSCOPE_MODEL, getDashScopeConfig } = require('./dashscope')
 
 const visionClient = new OpenAI(getDashScopeConfig())
-const VISION_MODEL = 'qwen3.7-plus'
 
 async function executeTool(name, args) {
   switch (name) {
@@ -335,7 +334,8 @@ async function analyzeVisuals(args) {
 
   try {
     const response = await visionClient.chat.completions.create({
-      model: VISION_MODEL,
+      model: DASHSCOPE_MODEL,
+      enable_thinking: false,
       messages: [{ role: 'user', content }],
       max_tokens: 1500,
     })
