@@ -47,6 +47,7 @@ function createAgentRunner({ client, model, systemPrompt, tools, executeTool, ma
   })
 
   return async function runAgent(userMessage, conversationHistory = [], onEvent = null, options = {}) {
+    const activeModel = options.model ?? model
     const activeTools = options.allowedTools
       ? tools.filter(tool => options.allowedTools.includes(tool.function.name))
       : tools
@@ -60,10 +61,10 @@ function createAgentRunner({ client, model, systemPrompt, tools, executeTool, ma
           ? [...state.messages, { role: 'user', content: '（系统提示：请根据已收集的信息给出你的建议，不要再调用工具了。）' }]
           : state.messages
         if (JSON.stringify(messages).length > run.limits.maxContextChars) throw new AgentError('CONTEXT_LIMIT', '对话内容过长，请开始新的会话', 400)
-        run.trace('model_start', { round: state.rounds + 1, summarize })
+        run.trace('model_start', { round: state.rounds + 1, summarize, model: activeModel })
         return run.model(async signal => {
           const stream = await client.chat.completions.create({
-            model, messages, stream: true, max_tokens: run.limits.maxOutputTokens,
+            model: activeModel, messages, stream: true, max_tokens: run.limits.maxOutputTokens,
             ...(options.enableThinking === false ? { enable_thinking: false } : {}),
             ...(!summarize ? { tools: activeTools, tool_choice: 'auto' } : {}),
           }, { signal, maxRetries: 0 })

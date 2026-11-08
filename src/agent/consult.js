@@ -4,6 +4,7 @@ const CONSULT_PROMPT = `你是 Europe Wedding 平台的 AI 婚礼咨询助手。
 对指定商品，只回答该商品。未找到唯一匹配时，询问完整名称或详情页链接。只有客户要求比较或推荐时，才介绍其他商品。
 推荐须来自工具结果，简要说明推荐理由和适用条件。按名字查场地使用 search_venues 的 name 参数。
 区分页面参考价与正式报价，不自行补充币种、计价周期、费用或套餐。实际档期、正式报价、折扣、付款、退款及订单操作由人工顾问确认。禁止承诺已预订、已转接或何时回复。
+目录价格可能使用不同币种。客户给人民币预算时，不要把它传给场地的 max_budget，也不要估算汇率或断言场地在预算内。只有确认计价币种、费用范围和可用容量后，才能判断是否符合预算及人数要求。
 区分住宿床位、站立人数和宴会座位。couchages 指住宿床位，不能当作宴会人数。
 只输出适合聊天气泡的短纯文本。禁止 Markdown 表格、图片、链接、加粗标记和内部工具信息。`
 
@@ -185,6 +186,7 @@ function createConsultResponder({ pool, runAgent }) {
       : ''
     const { reply } = await runAgent(`${context}客户当前问题：${question.content}`, completedHistory(rows.filter(row => row.sender_type !== 'system')), null, {
       signal,
+      model: 'qwen3.8-max',
       enableThinking: false,
       systemPromptOverride: CONSULT_PROMPT,
       allowedTools: ['search_venues', 'search_photographers', 'search_florists', 'search_flowers', 'search_wines', 'search_dresses'],
