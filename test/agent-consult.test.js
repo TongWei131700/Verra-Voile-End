@@ -106,3 +106,12 @@ test('a superseded consult never starts a model request', async () => {
   await assert.rejects(ask('推荐法国婚礼场地', null, AbortSignal.abort()), { name: 'AbortError' })
   assert.equal(calls.length, 0)
 })
+
+test('follow-ups honor explicitly switched products and do not fall back past an unknown name', async () => {
+  const oldVenue = user('拉斯卡莱特城堡')
+  const switched = setup({ history: [user('玛戈多少钱'), oldVenue] })
+  assert.match(await switched.ask('价格是多少'), /玛戈.*€250/)
+  assert.match(await switched.ask('这个城堡在哪'), /详情页链接/)
+  const unknown = setup({ history: [user('不存在城堡在哪'), oldVenue] })
+  assert.match(await unknown.ask('这个城堡有档期吗'), /详情页链接/)
+})

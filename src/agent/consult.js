@@ -30,6 +30,7 @@ const referenceCategories = {
   城堡: '目的地', 场地: '目的地', 庄园: '目的地', 酒店: '目的地', 摄影师: '摄影',
   团队: '婚礼团队', 花店: '花卉', 礼服: '礼服', 酒水: '酒水', 景点: '旅拍',
 }
+const reference = /^(?:这个|这位|这座|这家|该|它|他|她)?\s*(?:婚礼)?(城堡|场地|庄园|酒店|摄影师|团队|花店|礼服|酒水|景点)?$/
 
 function cleanQuestion(value) {
   return value.trim().replace(/^(?:你好|您好)[，,！!\s]*/, '').replace(/^请问[，,\s]*/, '')
@@ -39,6 +40,22 @@ function cleanQuestion(value) {
 function detailLink(value) {
   const match = /^(?:https?:\/\/(?:www\.)?europewedding\.cn)?\/(destinations|photography|wedding-team|flowers|dresses|wine|travel-photo)\/([a-z0-9][a-z0-9_-]{0,149})(?:[/?#].*)?$/i.exec(value)
   return match && { type: Object.keys(catalog).find(type => catalog[type][0] === match[1].toLowerCase()), slug: match[2] }
+}
+
+function parseQuestion(text) {
+  const current = cleanQuestion(text)
+  for (const [field, pattern] of fields) {
+    const match = pattern.exec(current)
+    if (!match) continue
+    const prefix = current.slice(0, match.index).trim()
+    const ref = reference.exec(prefix)
+    return { field, current, explicit: ref ? '' : prefix, referenceCategory: referenceCategories[ref?.[1]] }
+  }
+  return { current }
+}
+
+function looksLikeProduct(value) {
+  return Boolean(detailLink(value)) || /(?:城堡|庄园|摄影师|场地|酒店)$/.test(value)
 }
 
 async function lookup(pool, value, type, isSlug = false) {
@@ -111,7 +128,7 @@ function plainReply(reply) {
 
 function createConsultResponder({ pool, runAgent }) {
   return async function getConsultReply(userId, question, product, signal) {
-    const current = cleanQuestion(question.content)
+    const { current, field, explicit, referenceCategory } = parseQuestion(question.content)
     if (identity.test(current)) return '我是 Europe Wedding 的 AI 婚礼规划助手，可以帮你查场地、了解服务和梳理婚礼需求。具体档期和正式报价由人工顾问确认。'
     if (humanRequest.test(current)) return humanReply
 
@@ -126,20 +143,23 @@ function createConsultResponder({ pool, runAgent }) {
     }
     signal.throwIfAborted()
 
-    const fieldMatch = fields.map(([field, pattern]) => [field, pattern.exec(current)]).find(([, match]) => match)
-    const [field, match] = fieldMatch || []
-    const prefix = match ? current.slice(0, match.index).trim() : ''
-    const reference = /^(?:这个|这位|这座|这家|该|它|他|她)?\s*(?:婚礼)?(城堡|场地|庄园|酒店|摄影师|团队|花店|礼服|酒水|景点)?$/
-    const referenceCategory = referenceCategories[reference.exec(prefix)?.[1]]
-    const explicit = match && prefix && !reference.test(prefix) ? prefix : ''
     let matches = await lookup(pool, explicit || (!field ? current : ''))
     if (field && !explicit) {
       const recent = (productRow ? rows.slice(0, rows.indexOf(productRow)) : rows)
         .filter(row => row.sender_type === 'user')
         .slice(0, 4)
       for (const row of recent) {
-        matches = await lookup(pool, cleanQuestion(row.content), referenceCategory)
+        const previous = parseQuestion(row.content)
+        const candidate = previous.explicit || (!previous.field ? previous.current : '')
+        matches = await lookup(pool, candidate)
+        if (matches.length && referenceCategory && !matches.some(item => item.category === referenceCategory)) {
+          return '请发一下你想了解的商品全名或详情页链接，我帮你查对应资料。'
+        }
+        if (referenceCategory) matches = matches.filter(item => item.category === referenceCategory)
         if (matches.length) break
+        if (candidate && looksLikeProduct(candidate)) {
+          return '请发一下你想了解的商品全名或详情页链接，我帮你查对应资料。'
+        }
       }
       if (!matches.length && product && Object.hasOwn(catalog, product.type) && (!referenceCategory || referenceCategory === product.type)) {
         matches = await lookup(pool, product.slug || product.name, product.type, Boolean(product.slug))
@@ -150,7 +170,7 @@ function createConsultResponder({ pool, runAgent }) {
     if (matches.length > 1) return '目录里有多个同名结果。请发一下具体商品的详情页链接，我帮你确认。'
     if (field && matches.length === 1) return answerField(matches[0], field)
     if (!field && matches.length === 1) return `查到了${matches[0].name}。你想了解它的位置、参考价格，还是其他信息？`
-    if (field && (!explicit || detailLink(explicit) || /(?:城堡|庄园|摄影师|场地|酒店)$/.test(explicit))) {
+    if (field && (!explicit || looksLikeProduct(explicit))) {
       return '请发一下你想了解的商品全名或详情页链接，我帮你查对应资料。'
     }
 
