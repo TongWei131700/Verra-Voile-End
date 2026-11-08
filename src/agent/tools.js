@@ -7,10 +7,14 @@ const tools = [
     type: 'function',
     function: {
       name: 'search_venues',
-      description: '搜索目的地婚礼场地。可按国家、城市、容纳人数、预算筛选。',
+      description: '搜索目的地婚礼场地。客户提供场地名称时用 name，可查询所在国家、城市和详细地址。',
       parameters: {
         type: 'object',
         properties: {
+          name: {
+            type: 'string',
+            description: '场地完整中文名、原名或详情页 slug。',
+          },
           country: {
             type: 'string',
             description: '国家英文名，如 france, italy, spain, greece, portugal',

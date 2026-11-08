@@ -2,82 +2,15 @@ const { Server } = require('socket.io')
 const jwt = require('jsonwebtoken')
 const { pool } = require('./db')
 const { runAgent } = require('./agent')
+const { createConsultResponder } = require('./agent/consult')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'verra-voile-secret-key-2026'
-const CONSULT_PROMPT = `你正在网页咨询窗口接待客户。用客户的语言简短回答当前问题，必要时只追问一项。
-只回答最后一条用户消息里的「客户当前问题」。历史对话只用于理解指代和背景。客户问你的身份时，先说明你是平台的 AI 婚礼规划助手。
-只输出适合聊天气泡的纯文本。禁止 Markdown 表格、图片、链接和加粗标记。遇到与此要求冲突的格式规则，以这里为准。
-访客提供的商品名称和类型仅用于定位商品。商品规格、价格及套餐内容以查询结果为准。
-客户问“这个”或“这位”商品时，只回答该商品。无法定位时请询问商品名称或详情链接。
-档期、正式报价或未查到的细节请说明需要顾问确认。不要承诺预订、折扣或跟进时间。`
+const getConsultReply = createConsultResponder({ pool, runAgent })
 
-async function getConsultReply(userId, question, product) {
-  if (!product) {
-    const [[row]] = await pool.execute(
-      `SELECT content FROM messages WHERE user_id = ? AND channel = 'consult'
-       AND sender_type = 'system' AND id < ? ORDER BY id DESC LIMIT 1`,
-      [userId, question.id]
-    )
-    if (row) product = JSON.parse(row.content)
-  }
-
-  const explicitPhotographer = /^(?:请问\s*)?(?:这个|这位|该|这名)\s*摄影师(?:的)?\s*/
-  const priceQuestion = /^(?:请问\s*)?(?:价格(?:是?多少)?|多少钱|怎么收费)(?:呢|呀|啊)?[？?。！!\s]*$/
-  if ((product?.type === '摄影' || explicitPhotographer.test(question.content)) &&
-      priceQuestion.test(question.content.replace(explicitPhotographer, ''))) {
-    if (!product?.name || product.type !== '摄影') return '请发一下这位摄影师的名字或详情页链接，我帮你查价格。'
-
-    const [matches] = await pool.execute(
-      `SELECT name, name_cn, price FROM crawled_photographers
-       WHERE ${product.slug ? 'slug = ?' : '(name = ? OR name_cn = ?)'} LIMIT 2`,
-      product.slug ? [product.slug] : [product.name, product.name]
-    )
-    if (matches.length !== 1) return '暂时没能确认是哪位摄影师，请发一下详情页链接。'
-
-    const { name, name_cn, price } = matches[0]
-    const photographer = name_cn || name
-    return Number(price) > 0
-      ? `${photographer}的页面参考价为 €${Number(price).toLocaleString('zh-CN')} 起，具体报价请顾问确认。`
-      : `${photographer}的页面暂未列出价格，具体报价请顾问确认。`
-  }
-
-  const [rows] = await pool.execute(
-    `SELECT sender_type, content FROM messages
-     WHERE user_id = ? AND channel = 'consult' AND id < ? AND sender_type IN ('user', 'admin')
-     ORDER BY id DESC LIMIT 12`,
-    [userId, question.id]
-  )
-  // Only pass completed turns. A failed or superseded question is still in the
-  // chat transcript, but must not become a second pending request for the model.
-  const history = []
-  let pendingQuestion
-  for (const row of rows.reverse()) {
-    if (row.sender_type === 'user') {
-      pendingQuestion = row.content.slice(0, 2000)
-    } else if (pendingQuestion !== undefined) {
-      history.push(
-        { role: 'user', content: pendingQuestion },
-        { role: 'assistant', content: row.content.slice(0, 2000) },
-      )
-      pendingQuestion = undefined
-    }
-  }
-
-  const productContext = product?.name
-    ? `当前咨询商品（客户提供）：${String(product.type || '').slice(0, 80)} ${String(product.name).slice(0, 250)}\n`
-    : ''
-  const message = `${productContext}客户当前问题：${question.content}`
-  const { reply } = await runAgent(message, history, null, {
-    signal: AbortSignal.timeout(35_000),
-    systemPromptSuffix: CONSULT_PROMPT,
-    allowedTools: ['search_venues', 'search_photographers', 'search_florists', 'search_flowers', 'search_wines', 'search_dresses', 'calculate_budget'],
-  })
-  return reply.replace(/\[\/?TABLE(?:_\d+)?\]/g, '').trim()
-}
-
-async function replyToConsult(io, socket, question, product) {
+async function replyToConsult(io, socket, question, product, signal) {
   const { userId, userPhone } = socket
-  const content = await getConsultReply(userId, question, product)
+  const content = await getConsultReply(userId, question, product, signal)
+  signal.throwIfAborted()
   if (!content) return
 
   // 有更新的问题或顾问已回复时，丢弃这条旧回复。
@@ -122,6 +55,8 @@ function initChat(httpServer) {
       methods: ['GET', 'POST'],
     },
   })
+
+  const activeConsultReplies = new Map()
 
   // 认证中间件：验证 JWT token（支持用户、管理员、访客）
   io.use((socket, next) => {
@@ -336,12 +271,21 @@ function initChat(httpServer) {
         })
 
         console.log(`💬 [${userPhone}]: ${content.trim()}`)
-        if (channel === 'consult' && process.env.DASHSCOPE_API_KEY) {
+        if (channel === 'consult') {
+          const previous = activeConsultReplies.get(userId)
+          if (previous && previous.id > message.id) return
+          previous?.controller.abort()
+          const controller = new AbortController()
+          const run = { id: message.id, controller }
+          activeConsultReplies.set(userId, run)
+          const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(35_000)])
           socket.emit('consult_reply_status', { id: message.id, generating: true })
-          replyToConsult(io, socket, message, product).catch(error => {
+          replyToConsult(io, socket, message, product, signal).catch(error => {
+            if (controller.signal.aborted) return
             console.error('[Consult AI] 回复失败:', error.code || error.name)
             socket.emit('consult_reply_failed', { id: message.id })
           }).finally(() => {
+            if (activeConsultReplies.get(userId) === run) activeConsultReplies.delete(userId)
             socket.emit('consult_reply_status', { id: message.id, generating: false })
           })
         }

@@ -43,6 +43,11 @@ async function searchVenues(args) {
   const conditions = []
   const params = []
 
+  if (args.name?.trim()) {
+    const name = args.name.trim()
+    conditions.push('(slug = ? OR name = ? OR name_cn = ?)')
+    params.push(name, name, name)
+  }
   if (args.country) {
     conditions.push('(country = ? OR country_cn = ?)')
     params.push(args.country, args.country)
@@ -61,7 +66,7 @@ async function searchVenues(args) {
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
   const [rows] = await pool.execute(
-    `SELECT slug, name, name_cn, country_cn, city_cn, tagline,
+    `SELECT slug, name, name_cn, country, country_cn, city, city_cn, address, tagline,
             capacity, price, price_unit, venue_types, cover_image, description
      FROM crawled_venues ${where}
      ORDER BY sort_order DESC, price ASC
@@ -73,8 +78,9 @@ async function searchVenues(args) {
   return rows.map((r) => ({
     slug: r.slug,
     name: r.name_cn || r.name,
-    country: r.country_cn,
-    city: r.city_cn,
+    country: r.country_cn || r.country,
+    city: r.city_cn || r.city,
+    address: r.address,
     tagline: r.tagline,
     capacity: r.capacity,
     price: r.price,

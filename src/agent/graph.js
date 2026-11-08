@@ -64,6 +64,7 @@ function createAgentRunner({ client, model, systemPrompt, tools, executeTool, ma
         return run.model(async signal => {
           const stream = await client.chat.completions.create({
             model, messages, stream: true, max_tokens: run.limits.maxOutputTokens,
+            ...(options.enableThinking === false ? { enable_thinking: false } : {}),
             ...(!summarize ? { tools: activeTools, tool_choice: 'auto' } : {}),
           }, { signal, maxRetries: 0 })
           let content = '', finishReason
@@ -145,7 +146,7 @@ function createAgentRunner({ client, model, systemPrompt, tools, executeTool, ma
         .compile()
       const result = await graph.invoke({
         messages: [
-          { role: 'system', content: options.systemPromptSuffix ? `${systemPrompt}\n\n${options.systemPromptSuffix}` : systemPrompt },
+          { role: 'system', content: options.systemPromptOverride ?? (options.systemPromptSuffix ? `${systemPrompt}\n\n${options.systemPromptSuffix}` : systemPrompt) },
           ...trimHistory(conversationHistory),
           { role: 'user', content: userMessage },
         ],
