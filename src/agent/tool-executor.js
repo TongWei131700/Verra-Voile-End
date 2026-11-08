@@ -6,12 +6,9 @@ const { pool } = require('../db')
 const OpenAI = require('openai')
 const fs = require('fs')
 const path = require('path')
+const { getDashScopeConfig } = require('./dashscope')
 
-// 视觉模型客户端（复用 Token Plan endpoint + qwen3.7-plus 的视觉理解能力）
-const visionClient = new OpenAI({
-  apiKey: process.env.DASHSCOPE_API_KEY,
-  baseURL: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
-})
+const visionClient = new OpenAI(getDashScopeConfig())
 const VISION_MODEL = 'qwen3.7-plus'
 
 async function executeTool(name, args) {

@@ -1,6 +1,7 @@
 /** Public Agent API. LangGraph owns the model/tool/summary execution flow. */
 const { createAgentRunner } = require('./graph')
 const { trimHistory } = require('./graph')
+const { getDashScopeConfig } = require('./dashscope')
 
 // Lazy initialization allows health checks and tests without loading provider secrets.
 let runner
@@ -12,8 +13,7 @@ async function runAgent(userMessage, conversationHistory = [], onEvent = null, o
     const { executeTool } = require('./tool-executor')
     runner = createAgentRunner({
       client: new OpenAI({
-        apiKey: process.env.DASHSCOPE_API_KEY,
-        baseURL: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+        ...getDashScopeConfig(),
         timeout: 60000,
         maxRetries: 0,
       }),
